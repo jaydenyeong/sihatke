@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { User, Checkin } from '../models';
 import { sendPushToUsers } from './notificationService';
-import { triggerMissedCheckinAlert } from './alertService';
+import { triggerMissedCheckinAlert, runDeclinePatternCheck } from './alertService';
 
 // Window sizes (minutes)
 const REMINDER_LEAD_MIN = 0;   // fire at or after scheduled time
@@ -175,5 +175,11 @@ export function startSchedulers(): void {
   cron.schedule('*/15 * * * *', runReminderJob);
   // Every hour on the :05
   cron.schedule('5 * * * *', runMissedJob);
-  console.log('Schedulers started: reminders (15m), missed check-ins (1h)');
+  // Daily at 00:30 — scan for declining health patterns
+  cron.schedule('30 0 * * *', () => {
+    runDeclinePatternCheck().catch((err) =>
+      console.error('Decline pattern check failed:', err)
+    );
+  });
+  console.log('Schedulers started: reminders (15m), missed (1h), patterns (daily)');
 }
