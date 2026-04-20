@@ -1,17 +1,17 @@
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 import { getToken } from './auth';
 
 const IPV4 = /^\d+\.\d+\.\d+\.\d+$/;
 
+// Production backend URL
+const PROD_API_URL = 'https://sihaty-api.onrender.com/api';
+
 function resolveBaseUrl(): string {
-  // 1. Explicit override via app/.env — create the file with:
-  //    EXPO_PUBLIC_API_URL=https://your-ngrok-url.ngrok-free.app/api
-  //    Only needed when LAN is blocked (public Wi-Fi, AP isolation).
+  // 1. Explicit override via app/.env (e.g. for ngrok tunneling).
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
   if (envUrl) return envUrl;
 
-  // 2. Auto-detect from Expo dev server's LAN IP (works at home / same Wi-Fi).
+  // 2. In Expo dev, auto-detect LAN IP from Metro for local backend.
   const hostUri = (Constants.expoConfig as any)?.hostUri;
   const debuggerHost = (Constants.manifest as any)?.debuggerHost;
 
@@ -23,11 +23,8 @@ function resolveBaseUrl(): string {
     }
   }
 
-  // 3. Fallback: emulator loopback (Android) or localhost (iOS simulator).
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:3000/api';
-  }
-  return 'http://localhost:3000/api';
+  // 3. No dev server detected (standalone build) — use production.
+  return PROD_API_URL;
 }
 
 export const API_BASE_URL = resolveBaseUrl();
