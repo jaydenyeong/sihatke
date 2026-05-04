@@ -15,7 +15,7 @@ export const unstable_settings = {
 
 SplashScreen.preventAutoHideAsync();
 
-const PUBLIC_ROUTES = new Set(['login', 'register']);
+const PUBLIC_ROUTES = new Set(['login', 'register', 'welcome']);
 
 function useAuthGuard(ready: boolean) {
   const router = useRouter();
@@ -33,7 +33,7 @@ function useAuthGuard(ready: boolean) {
       const first = segments[0] ?? '';
       const isPublic = PUBLIC_ROUTES.has(first);
       if (!token && !isPublic) {
-        router.replace('/login');
+        router.replace('/welcome');
       } else if (token && isPublic) {
         router.replace('/');
       }
@@ -76,6 +76,7 @@ export default function RootLayout() {
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="welcome" />
         <Stack.Screen name="login" options={{ presentation: 'modal' }} />
         <Stack.Screen name="register" options={{ presentation: 'modal' }} />
         <Stack.Screen name="profile-setup" />

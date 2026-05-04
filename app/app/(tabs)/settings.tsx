@@ -86,8 +86,12 @@ export default function SettingsScreen() {
       if (times.length > 1) {
         setTimes(times.filter((t) => t !== time));
       }
+      // else: last selected time — can't deselect, do nothing
     } else if (times.length < frequency) {
       setTimes([...times, time].sort());
+    } else if (frequency === 1) {
+      // Replace the single selected time
+      setTimes([time]);
     } else {
       setError(`You can pick ${frequency} time${frequency > 1 ? 's' : ''}`);
     }
