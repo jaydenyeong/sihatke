@@ -1,16 +1,41 @@
 import { Router, Response } from 'express';
 import { body } from 'express-validator';
-import { Contact } from '../models';
+import { db } from '../db/supabase';
+import { mapContact } from '../db/mappers';
+import type { ContactRow } from '../db/types';
 import { auth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+const FIELD_MAP: Record<string, string> = {
+  name: 'name',
+  phone: 'phone',
+  email: 'email',
+  relationship: 'relationship',
+  notifyOnHelp: 'notify_on_help',
+  notifyOnMissed: 'notify_on_missed',
+  notifyOnDecline: 'notify_on_decline',
+  isEmergency: 'is_emergency',
+};
+
 // GET /api/contacts
 router.get('/', auth, async (req: AuthRequest, res: Response) => {
   try {
-    const contacts = await Contact.find({ userId: req.userId });
-    res.json(contacts);
+    const { data, error } = await db()
+      .from('contacts')
+      .select('*')
+      .eq('user_id', req.userId!)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Contacts list error:', error);
+      res.status(500).json({ error: 'Server error' });
+      return;
+    }
+
+    res.json((data as ContactRow[]).map(mapContact));
   } catch (err) {
+    console.error('Contacts list error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -28,16 +53,33 @@ router.post(
   ],
   async (req: AuthRequest, res: Response) => {
     try {
-      const contact = await Contact.create({
-        userId: req.userId,
+      const insert: Record<string, unknown> = {
+        user_id: req.userId!,
         name: req.body.name,
-        phone: req.body.phone,
-        email: req.body.email,
-        relationship: req.body.relationship,
-        isEmergency: req.body.isEmergency,
-      });
-      res.status(201).json(contact);
+      };
+      if (req.body.phone !== undefined) insert.phone = req.body.phone;
+      if (req.body.email !== undefined) insert.email = req.body.email;
+      if (req.body.relationship !== undefined) insert.relationship = req.body.relationship;
+      if (req.body.isEmergency !== undefined) insert.is_emergency = req.body.isEmergency;
+      if (req.body.notifyOnHelp !== undefined) insert.notify_on_help = req.body.notifyOnHelp;
+      if (req.body.notifyOnMissed !== undefined) insert.notify_on_missed = req.body.notifyOnMissed;
+      if (req.body.notifyOnDecline !== undefined) insert.notify_on_decline = req.body.notifyOnDecline;
+
+      const { data, error } = await db()
+        .from('contacts')
+        .insert(insert)
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        console.error('Contact insert error:', error);
+        res.status(500).json({ error: 'Server error' });
+        return;
+      }
+
+      res.status(201).json(mapContact(data as ContactRow));
     } catch (err) {
+      console.error('Contact insert error:', err);
       res.status(500).json({ error: 'Server error' });
     }
   }
@@ -46,17 +88,38 @@ router.post(
 // PUT /api/contacts/:id
 router.put('/:id', auth, async (req: AuthRequest, res: Response) => {
   try {
-    const contact = await Contact.findOneAndUpdate(
-      { _id: req.params.id, userId: req.userId },
-      req.body,
-      { new: true, runValidators: true }
-    );
-    if (!contact) {
+    const updates: Record<string, unknown> = {};
+    for (const [apiKey, dbKey] of Object.entries(FIELD_MAP)) {
+      if (req.body[apiKey] !== undefined) updates[dbKey] = req.body[apiKey];
+    }
+
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: 'No updatable fields' });
+      return;
+    }
+
+    const { data, error } = await db()
+      .from('contacts')
+      .update(updates)
+      .eq('id', req.params.id)
+      .eq('user_id', req.userId!)
+      .select('*')
+      .maybeSingle();
+
+    if (error) {
+      console.error('Contact update error:', error);
+      res.status(500).json({ error: 'Server error' });
+      return;
+    }
+
+    if (!data) {
       res.status(404).json({ error: 'Contact not found' });
       return;
     }
-    res.json(contact);
+
+    res.json(mapContact(data as ContactRow));
   } catch (err) {
+    console.error('Contact update error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -64,16 +127,28 @@ router.put('/:id', auth, async (req: AuthRequest, res: Response) => {
 // DELETE /api/contacts/:id
 router.delete('/:id', auth, async (req: AuthRequest, res: Response) => {
   try {
-    const contact = await Contact.findOneAndDelete({
-      _id: req.params.id,
-      userId: req.userId,
-    });
-    if (!contact) {
+    const { data, error } = await db()
+      .from('contacts')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', req.userId!)
+      .select('id')
+      .maybeSingle();
+
+    if (error) {
+      console.error('Contact delete error:', error);
+      res.status(500).json({ error: 'Server error' });
+      return;
+    }
+
+    if (!data) {
       res.status(404).json({ error: 'Contact not found' });
       return;
     }
+
     res.json({ message: 'Contact removed' });
   } catch (err) {
+    console.error('Contact delete error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

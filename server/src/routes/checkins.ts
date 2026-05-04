@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
 import { body } from 'express-validator';
-import { Checkin } from '../models';
+import { db } from '../db/supabase';
+import { mapCheckin } from '../db/mappers';
+import type { CheckinRow } from '../db/types';
 import { auth, AuthRequest } from '../middleware/auth';
 import { triggerNeedHelpAlert } from '../services/alertService';
 
@@ -17,12 +19,22 @@ router.post(
   ],
   async (req: AuthRequest, res: Response) => {
     try {
-      const checkin = await Checkin.create({
-        userId: req.userId,
-        physicalStatus: req.body.physicalStatus,
-        mentalStatus: req.body.mentalStatus,
-        note: req.body.note,
-      });
+      const { data, error } = await db()
+        .from('checkins')
+        .insert({
+          user_id: req.userId!,
+          physical_status: req.body.physicalStatus,
+          mental_status: req.body.mentalStatus,
+          note: req.body.note ?? null,
+        })
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        console.error('Checkin insert error:', error);
+        res.status(500).json({ error: 'Server error' });
+        return;
+      }
 
       if (
         req.body.physicalStatus === 'need_help' ||
@@ -33,8 +45,9 @@ router.post(
         );
       }
 
-      res.status(201).json(checkin);
+      res.status(201).json(mapCheckin(data as CheckinRow));
     } catch (err) {
+      console.error('Checkin error:', err);
       res.status(500).json({ error: 'Server error' });
     }
   }
@@ -45,17 +58,28 @@ router.get('/', auth, async (req: AuthRequest, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
-    const skip = (page - 1) * limit;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
 
-    const checkins = await Checkin.find({ userId: req.userId })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    const { data, error, count } = await db()
+      .from('checkins')
+      .select('*', { count: 'exact' })
+      .eq('user_id', req.userId!)
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
-    const total = await Checkin.countDocuments({ userId: req.userId });
+    if (error) {
+      console.error('Checkins list error:', error);
+      res.status(500).json({ error: 'Server error' });
+      return;
+    }
+
+    const checkins = (data as CheckinRow[]).map(mapCheckin);
+    const total = count ?? 0;
 
     res.json({ checkins, total, page, pages: Math.ceil(total / limit) });
   } catch (err) {
+    console.error('Checkins list error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -63,9 +87,23 @@ router.get('/', auth, async (req: AuthRequest, res: Response) => {
 // GET /api/checkins/latest
 router.get('/latest', auth, async (req: AuthRequest, res: Response) => {
   try {
-    const checkin = await Checkin.findOne({ userId: req.userId }).sort({ createdAt: -1 });
-    res.json(checkin);
+    const { data, error } = await db()
+      .from('checkins')
+      .select('*')
+      .eq('user_id', req.userId!)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Latest checkin error:', error);
+      res.status(500).json({ error: 'Server error' });
+      return;
+    }
+
+    res.json(data ? mapCheckin(data as CheckinRow) : null);
   } catch (err) {
+    console.error('Latest checkin error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

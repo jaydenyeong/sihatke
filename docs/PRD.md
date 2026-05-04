@@ -12,25 +12,43 @@ The app should:
   - mental state
 - Use extremely simple UX (large buttons, minimal text, accessible design)
 - Send a summarized status to trusted contacts
+- One app, two roles. A user can be both sender and receiver
 - Respect privacy (no continuous tracking, no invasive monitoring)
 
-## Key Features
+# Core User Flows
+Sender flow — daily check-in (target: under 10 seconds):
 
-### 1. Daily Check-in System
-- Tap-based response (e.g. thumbs up / not great / need help)
-- Optional short note or voice input
-- Missed check-in detection
+Open app. Single screen with three large emoji-style buttons for physical state (😊 / 😐 / 😟) and three for mental state.
+One tap each → optional one-line text for "anything I need help with today?"
+One large "Send" button with confirmation text
 
-### 2. Smart Alerts
-- Notify family ONLY when:
-  - User reports "need help"
-  - Multiple check-ins missed
-  - Pattern shows decline
+Sender flow — initial setup (done once, ideally with help from a family member):
 
-### 3. Privacy-first Design
-- No constant location tracking
-- No raw data sharing unless necessary
-- Summarized status only
+Phone number / OTP login.
+Add receivers: each receiver gets an SMS/WhatsApp invite with a join code.
+Configure reminder times.
+Optional: add basic profile (age, languages, important conditions).
+
+Receiver flow:
+
+Receive push notification
+Tap to open dashboard showing all linked seniors with status traffic-light (green/yellow/red).
+View history per sender — chart of last 7/30 days.
+Critical: a "missed check-in" alert if a sender skips an expected window. This is one of the highest-value features.
+One-tap call or message back to the sender.
+
+
+# Information Architecture
+Three persistent tabs in the app:
+
+Today (primary action surface)
+Circle (people you're connected to)
+Settings (reminders, language, account)
+
+Receivers see their version of "Today" as the dashboard of all their linked seniors. Same shell, different content.
+
+
+
 
 ### 4. Community Mode (optional)
 - Nearby trusted people can offer help

@@ -2,7 +2,9 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
-import { User } from '../models';
+import { db } from '../db/supabase';
+import { mapUser } from '../db/mappers';
+import type { UserRow } from '../db/types';
 import { config } from '../config/env';
 import { auth, AuthRequest } from '../middleware/auth';
 
@@ -31,24 +33,42 @@ router.post(
     try {
       const { email, password, fullName } = req.body;
 
-      const existing = await User.findOne({ email });
+      const { data: existing } = await db()
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+
       if (existing) {
         res.status(409).json({ error: 'Email already in use' });
         return;
       }
 
-      const hashed = await bcrypt.hash(password, 12);
-      const user = await User.create({ email, password: hashed, fullName });
+      const passwordHash = await bcrypt.hash(password, 12);
 
-      const token = jwt.sign({ userId: user._id }, config.jwtSecret, {
+      const { data, error } = await db()
+        .from('users')
+        .insert({ email, password_hash: passwordHash, full_name: fullName })
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        console.error('Register insert error:', error);
+        res.status(500).json({ error: 'Server error' });
+        return;
+      }
+
+      const user = data as UserRow;
+      const token = jwt.sign({ userId: user.id }, config.jwtSecret, {
         expiresIn: config.jwtExpiresIn,
       });
 
       res.status(201).json({
         token,
-        user: { id: user._id, email: user.email, fullName: user.fullName },
+        user: { id: user.id, email: user.email, fullName: user.full_name },
       });
     } catch (err) {
+      console.error('Register error:', err);
       res.status(500).json({ error: 'Server error' });
     }
   }
@@ -64,27 +84,40 @@ router.post(
     try {
       const { email, password } = req.body;
 
-      const user = await User.findOne({ email });
+      const { data, error } = await db()
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Login lookup error:', error);
+        res.status(500).json({ error: 'Server error' });
+        return;
+      }
+
+      const user = data as UserRow | null;
       if (!user) {
         res.status(401).json({ error: 'Invalid credentials' });
         return;
       }
 
-      const match = await bcrypt.compare(password, user.password);
+      const match = await bcrypt.compare(password, user.password_hash);
       if (!match) {
         res.status(401).json({ error: 'Invalid credentials' });
         return;
       }
 
-      const token = jwt.sign({ userId: user._id }, config.jwtSecret, {
+      const token = jwt.sign({ userId: user.id }, config.jwtSecret, {
         expiresIn: config.jwtExpiresIn,
       });
 
       res.json({
         token,
-        user: { id: user._id, email: user.email, fullName: user.fullName },
+        user: { id: user.id, email: user.email, fullName: user.full_name },
       });
     } catch (err) {
+      console.error('Login error:', err);
       res.status(500).json({ error: 'Server error' });
     }
   }
@@ -93,13 +126,26 @@ router.post(
 // GET /api/auth/me
 router.get('/me', auth, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await User.findById(req.userId).select('-password');
-    if (!user) {
+    const { data, error } = await db()
+      .from('users')
+      .select('*')
+      .eq('id', req.userId!)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Me lookup error:', error);
+      res.status(500).json({ error: 'Server error' });
+      return;
+    }
+
+    if (!data) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    res.json(user);
+
+    res.json(mapUser(data as UserRow));
   } catch (err) {
+    console.error('Me error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

@@ -1,35 +1,42 @@
-import { Contact, Alert, User, Checkin } from '../models';
+import { db } from '../db/supabase';
+import type { ContactRow, UserRow } from '../db/types';
 import { sendPushToUsers } from './notificationService';
 
 export async function triggerNeedHelpAlert(userId: string): Promise<void> {
-  const [user, contacts] = await Promise.all([
-    User.findById(userId).select('fullName'),
-    Contact.find({ userId, notifyOnHelp: true }),
+  const [{ data: user }, { data: contacts }] = await Promise.all([
+    db().from('users').select('full_name').eq('id', userId).maybeSingle(),
+    db()
+      .from('contacts')
+      .select('id, contact_user_id')
+      .eq('user_id', userId)
+      .eq('notify_on_help', true),
   ]);
 
-  if (!user || contacts.length === 0) return;
+  if (!user || !contacts || contacts.length === 0) return;
 
-  // Create alert docs
-  const alertDocs = contacts.map((c) => ({
-    userId,
-    contactId: c._id,
-    alertType: 'need_help' as const,
-    message: `${user.fullName} has reported they need help`,
+  const fullName = (user as Pick<UserRow, 'full_name'>).full_name;
+  const message = `${fullName} has reported they need help`;
+
+  const alertDocs = (contacts as Pick<ContactRow, 'id' | 'contact_user_id'>[]).map((c) => ({
+    user_id: userId,
+    contact_id: c.id,
+    alert_type: 'need_help' as const,
+    message,
   }));
-  await Alert.insertMany(alertDocs);
+  const { error } = await db().from('alerts').insert(alertDocs);
+  if (error) {
+    console.error('Need-help alert insert error:', error);
+    return;
+  }
 
-  // Push to contacts who are also app users
-  const contactUserIds = contacts
-    .filter((c) => c.contactUserId)
-    .map((c) => c.contactUserId!.toString());
+  const contactUserIds = (contacts as Pick<ContactRow, 'id' | 'contact_user_id'>[])
+    .map((c) => c.contact_user_id)
+    .filter((id): id is string => !!id);
 
   if (contactUserIds.length > 0) {
-    await sendPushToUsers(
-      contactUserIds,
-      'Help Needed',
-      `${user.fullName} has reported they need help`,
-      { alertType: 'need_help' }
-    );
+    await sendPushToUsers(contactUserIds, 'Help Needed', message, {
+      alertType: 'need_help',
+    });
   }
 }
 
@@ -37,34 +44,40 @@ export async function triggerMissedCheckinAlert(
   userId: string,
   scheduledTime: string
 ): Promise<void> {
-  const [user, contacts] = await Promise.all([
-    User.findById(userId).select('fullName'),
-    Contact.find({ userId, notifyOnMissed: true }),
+  const [{ data: user }, { data: contacts }] = await Promise.all([
+    db().from('users').select('full_name').eq('id', userId).maybeSingle(),
+    db()
+      .from('contacts')
+      .select('id, contact_user_id')
+      .eq('user_id', userId)
+      .eq('notify_on_missed', true),
   ]);
 
-  if (!user || contacts.length === 0) return;
+  if (!user || !contacts || contacts.length === 0) return;
 
-  const message = `${user.fullName} missed their ${scheduledTime} check-in`;
+  const fullName = (user as Pick<UserRow, 'full_name'>).full_name;
+  const message = `${fullName} missed their ${scheduledTime} check-in`;
 
-  const alertDocs = contacts.map((c) => ({
-    userId,
-    contactId: c._id,
-    alertType: 'missed_checkin' as const,
+  const alertDocs = (contacts as Pick<ContactRow, 'id' | 'contact_user_id'>[]).map((c) => ({
+    user_id: userId,
+    contact_id: c.id,
+    alert_type: 'missed_checkin' as const,
     message,
   }));
-  await Alert.insertMany(alertDocs);
+  const { error } = await db().from('alerts').insert(alertDocs);
+  if (error) {
+    console.error('Missed-checkin alert insert error:', error);
+    return;
+  }
 
-  const contactUserIds = contacts
-    .filter((c) => c.contactUserId)
-    .map((c) => c.contactUserId!.toString());
+  const contactUserIds = (contacts as Pick<ContactRow, 'id' | 'contact_user_id'>[])
+    .map((c) => c.contact_user_id)
+    .filter((id): id is string => !!id);
 
   if (contactUserIds.length > 0) {
-    await sendPushToUsers(
-      contactUserIds,
-      'Missed Check-in',
-      message,
-      { alertType: 'missed_checkin' }
-    );
+    await sendPushToUsers(contactUserIds, 'Missed Check-in', message, {
+      alertType: 'missed_checkin',
+    });
   }
 }
 
@@ -76,61 +89,82 @@ const DECLINE_WINDOW_DAYS = 7;
  * 3+ check-ins with "not_great" or "need_help" (physical OR mental)
  * within the last 7 days triggers a decline_pattern alert to contacts
  * with notifyOnDecline enabled.
- *
- * Uses a recent-alert check to avoid duplicate alerts within the window.
  */
 export async function runDeclinePatternCheck(): Promise<void> {
-  const windowStart = new Date(Date.now() - DECLINE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const windowStart = new Date(
+    Date.now() - DECLINE_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
 
-  const users = await User.find({}).select('_id fullName').lean();
+  const { data: users, error: userErr } = await db()
+    .from('users')
+    .select('id, full_name');
 
-  for (const user of users) {
-    const uid = user._id.toString();
+  if (userErr || !users) {
+    console.error('Decline pattern user fetch error:', userErr);
+    return;
+  }
 
+  for (const user of users as Pick<UserRow, 'id' | 'full_name'>[]) {
     // Count concerning check-ins in the window
-    const badCount = await Checkin.countDocuments({
-      userId: uid,
-      createdAt: { $gte: windowStart },
-      $or: [
-        { physicalStatus: { $in: ['not_great', 'need_help'] } },
-        { mentalStatus: { $in: ['not_great', 'need_help'] } },
-      ],
-    });
+    const { count: badCount, error: countErr } = await db()
+      .from('checkins')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', windowStart)
+      .or(
+        'physical_status.in.(not_great,need_help),mental_status.in.(not_great,need_help)'
+      );
 
-    if (badCount < DECLINE_THRESHOLD) continue;
+    if (countErr) {
+      console.error('Decline count error:', countErr);
+      continue;
+    }
+    if ((badCount ?? 0) < DECLINE_THRESHOLD) continue;
 
-    // Skip if we already sent a decline_pattern alert for this user in the window
-    const recentAlert = await Alert.findOne({
-      userId: uid,
-      alertType: 'decline_pattern',
-      createdAt: { $gte: windowStart },
-    });
+    // Skip if a recent decline_pattern alert already exists for this user
+    const { data: recentAlert } = await db()
+      .from('alerts')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('alert_type', 'decline_pattern')
+      .gte('created_at', windowStart)
+      .limit(1)
+      .maybeSingle();
+
     if (recentAlert) continue;
 
-    const contacts = await Contact.find({ userId: uid, notifyOnDecline: true });
-    if (contacts.length === 0) continue;
+    const { data: contacts } = await db()
+      .from('contacts')
+      .select('id, contact_user_id')
+      .eq('user_id', user.id)
+      .eq('notify_on_decline', true);
 
-    const message = `${user.fullName} has been feeling unwell frequently over the past week`;
+    if (!contacts || contacts.length === 0) continue;
 
-    const alertDocs = contacts.map((c) => ({
-      userId: uid,
-      contactId: c._id,
-      alertType: 'decline_pattern' as const,
-      message,
-    }));
-    await Alert.insertMany(alertDocs);
+    const message = `${user.full_name} has been feeling unwell frequently over the past week`;
 
-    const contactUserIds = contacts
-      .filter((c) => c.contactUserId)
-      .map((c) => c.contactUserId!.toString());
+    const alertDocs = (contacts as Pick<ContactRow, 'id' | 'contact_user_id'>[]).map(
+      (c) => ({
+        user_id: user.id,
+        contact_id: c.id,
+        alert_type: 'decline_pattern' as const,
+        message,
+      })
+    );
+    const { error: insertErr } = await db().from('alerts').insert(alertDocs);
+    if (insertErr) {
+      console.error('Decline alert insert error:', insertErr);
+      continue;
+    }
+
+    const contactUserIds = (contacts as Pick<ContactRow, 'id' | 'contact_user_id'>[])
+      .map((c) => c.contact_user_id)
+      .filter((id): id is string => !!id);
 
     if (contactUserIds.length > 0) {
-      await sendPushToUsers(
-        contactUserIds,
-        'Health Concern',
-        message,
-        { alertType: 'decline_pattern' }
-      );
+      await sendPushToUsers(contactUserIds, 'Health Concern', message, {
+        alertType: 'decline_pattern',
+      });
     }
   }
 }

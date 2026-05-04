@@ -1,5 +1,6 @@
 import cron from 'node-cron';
-import { User, Checkin } from '../models';
+import { db } from '../db/supabase';
+import type { UserRow } from '../db/types';
 import { sendPushToUsers } from './notificationService';
 import { triggerMissedCheckinAlert, runDeclinePatternCheck } from './alertService';
 
@@ -60,17 +61,17 @@ async function hasCheckinForSlot(
   tz: string,
   slot: { h: number; m: number }
 ): Promise<boolean> {
-  // Build the start/end of today in the user's tz, then find any checkin in that day.
-  // Simple approach: fetch today's check-ins for the user and match slot by local time.
-  const now = new Date();
-  const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
-  const checkins = await Checkin.find({
-    userId,
-    createdAt: { $gte: twelveHoursAgo },
-  }).select('createdAt').lean();
+  const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await db()
+    .from('checkins')
+    .select('created_at')
+    .eq('user_id', userId)
+    .gte('created_at', twelveHoursAgo);
 
-  for (const c of checkins) {
-    const local = nowInTimezoneAt(tz, c.createdAt);
+  if (error || !data) return false;
+
+  for (const c of data as { created_at: string }[]) {
+    const local = nowInTimezoneAt(tz, new Date(c.created_at));
     const diff = Math.abs(diffMinutes(local, slot));
     if (diff <= 60) return true;
   }
@@ -99,22 +100,29 @@ function nowInTimezoneAt(tz: string, date: Date): { h: number; m: number } {
  */
 async function runReminderJob(): Promise<void> {
   try {
-    const users = await User.find({}).select('_id checkinTimes timezone').lean();
-    for (const user of users) {
+    const { data: users, error } = await db()
+      .from('users')
+      .select('id, checkin_times, timezone');
+    if (error || !users) {
+      console.error('Reminder users fetch error:', error);
+      return;
+    }
+
+    for (const user of users as Pick<UserRow, 'id' | 'checkin_times' | 'timezone'>[]) {
       const tz = user.timezone || 'UTC';
       const now = nowInTimezone(tz);
 
-      for (const timeStr of user.checkinTimes ?? []) {
+      for (const timeStr of user.checkin_times ?? []) {
         const slot = parseHHMM(timeStr);
         if (!slot) continue;
         const diff = diffMinutes(now, slot);
         if (diff < REMINDER_LEAD_MIN || diff > REMINDER_LAG_MAX) continue;
 
-        const already = await hasCheckinForSlot(user._id.toString(), tz, slot);
+        const already = await hasCheckinForSlot(user.id, tz, slot);
         if (already) continue;
 
         sendPushToUsers(
-          [user._id.toString()],
+          [user.id],
           'Time for your check-in',
           `Tap to do your ${timeStr} check-in.`,
           { kind: 'reminder', time: timeStr }
@@ -135,12 +143,19 @@ const notifiedMissed = new Set<string>();
 
 async function runMissedJob(): Promise<void> {
   try {
-    const users = await User.find({}).select('_id checkinTimes timezone').lean();
-    for (const user of users) {
+    const { data: users, error } = await db()
+      .from('users')
+      .select('id, checkin_times, timezone');
+    if (error || !users) {
+      console.error('Missed users fetch error:', error);
+      return;
+    }
+
+    for (const user of users as Pick<UserRow, 'id' | 'checkin_times' | 'timezone'>[]) {
       const tz = user.timezone || 'UTC';
       const now = nowInTimezone(tz);
 
-      for (const timeStr of user.checkinTimes ?? []) {
+      for (const timeStr of user.checkin_times ?? []) {
         const slot = parseHHMM(timeStr);
         if (!slot) continue;
         const diff = diffMinutes(now, slot);
@@ -148,14 +163,14 @@ async function runMissedJob(): Promise<void> {
         // Don't flag as missed if too far past (e.g. 5+ hours)
         if (diff > 5 * 60) continue;
 
-        const key = `${user._id.toString()}|${now.dayKey}|${timeStr}`;
+        const key = `${user.id}|${now.dayKey}|${timeStr}`;
         if (notifiedMissed.has(key)) continue;
 
-        const already = await hasCheckinForSlot(user._id.toString(), tz, slot);
+        const already = await hasCheckinForSlot(user.id, tz, slot);
         if (already) continue;
 
         notifiedMissed.add(key);
-        triggerMissedCheckinAlert(user._id.toString(), timeStr).catch((err) =>
+        triggerMissedCheckinAlert(user.id, timeStr).catch((err) =>
           console.error('Missed alert failed:', err)
         );
       }

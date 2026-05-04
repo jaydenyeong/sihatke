@@ -1,20 +1,45 @@
 import { Router, Response } from 'express';
 import { body } from 'express-validator';
-import { User } from '../models';
+import { db } from '../db/supabase';
+import { mapUser } from '../db/mappers';
+import type { UserRow } from '../db/types';
 import { auth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// camelCase API field -> snake_case column
+const FIELD_MAP: Record<string, string> = {
+  fullName: 'full_name',
+  avatarUrl: 'avatar_url',
+  dateOfBirth: 'date_of_birth',
+  checkinTimes: 'checkin_times',
+  checkinFrequency: 'checkin_frequency',
+  timezone: 'timezone',
+};
+
 // GET /api/profile
 router.get('/', auth, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await User.findById(req.userId).select('-password');
-    if (!user) {
+    const { data, error } = await db()
+      .from('users')
+      .select('*')
+      .eq('id', req.userId!)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Profile get error:', error);
+      res.status(500).json({ error: 'Server error' });
+      return;
+    }
+
+    if (!data) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    res.json(user);
+
+    res.json(mapUser(data as UserRow));
   } catch (err) {
+    console.error('Profile get error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -32,25 +57,48 @@ router.put(
   ],
   async (req: AuthRequest, res: Response) => {
     try {
-      const allowed = ['fullName', 'checkinTimes', 'checkinFrequency', 'timezone', 'dateOfBirth', 'avatarUrl'];
       const updates: Record<string, unknown> = {};
-      for (const key of allowed) {
-        if (req.body[key] !== undefined) {
-          updates[key] = req.body[key];
+      for (const [apiKey, dbKey] of Object.entries(FIELD_MAP)) {
+        if (req.body[apiKey] !== undefined) {
+          updates[dbKey] = req.body[apiKey];
         }
       }
 
-      const user = await User.findByIdAndUpdate(req.userId, updates, {
-        new: true,
-        runValidators: true,
-      }).select('-password');
+      if (Object.keys(updates).length === 0) {
+        // Nothing to update — just return the current row.
+        const { data } = await db()
+          .from('users')
+          .select('*')
+          .eq('id', req.userId!)
+          .maybeSingle();
+        if (!data) {
+          res.status(404).json({ error: 'User not found' });
+          return;
+        }
+        res.json(mapUser(data as UserRow));
+        return;
+      }
 
-      if (!user) {
+      const { data, error } = await db()
+        .from('users')
+        .update(updates)
+        .eq('id', req.userId!)
+        .select('*')
+        .maybeSingle();
+
+      if (error) {
+        console.error('Profile update error:', error);
+        res.status(500).json({ error: 'Server error' });
+        return;
+      }
+      if (!data) {
         res.status(404).json({ error: 'User not found' });
         return;
       }
-      res.json(user);
+
+      res.json(mapUser(data as UserRow));
     } catch (err) {
+      console.error('Profile update error:', err);
       res.status(500).json({ error: 'Server error' });
     }
   }
