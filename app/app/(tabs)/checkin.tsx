@@ -104,11 +104,12 @@ export default function CheckInScreen() {
                   accessibilityLabel={`Body feels ${opt.label}`}
                   style={({ pressed }) => [
                     styles.optionButton,
+                    { backgroundColor: STATUS_META[opt.value].bgColor, borderColor: STATUS_META[opt.value].color },
                     pressed && styles.optionPressed,
                   ]}
                   onPress={() => handlePhysicalSelect(opt.value)}>
                   <Text style={styles.optionEmoji}>{opt.emoji}</Text>
-                  <Text style={styles.optionLabel}>{opt.label}</Text>
+                  <Text style={[styles.optionLabel, { color: STATUS_META[opt.value].color }]}>{opt.label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -127,11 +128,12 @@ export default function CheckInScreen() {
                   accessibilityLabel={`Mind feels ${opt.label}`}
                   style={({ pressed }) => [
                     styles.optionButton,
+                    { backgroundColor: STATUS_META[opt.value].bgColor, borderColor: STATUS_META[opt.value].color },
                     pressed && styles.optionPressed,
                   ]}
                   onPress={() => handleMentalSelect(opt.value)}>
                   <Text style={styles.optionEmoji}>{opt.emoji}</Text>
-                  <Text style={styles.optionLabel}>{opt.label}</Text>
+                  <Text style={[styles.optionLabel, { color: STATUS_META[opt.value].color }]}>{opt.label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -226,12 +228,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   optionButton: {
-    backgroundColor: theme.primaryLight,
     borderRadius: 16,
+    borderWidth: 2,
     padding: 20,
     alignItems: 'center',
     width: '47%',
-    minHeight: 100,
+    minHeight: 110,
     justifyContent: 'center',
   },
   optionPressed: {

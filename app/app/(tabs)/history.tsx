@@ -108,29 +108,37 @@ export default function HistoryScreen() {
           renderSectionHeader={({ section }) => (
             <Text style={styles.sectionHeader}>{section.title}</Text>
           )}
-          renderItem={({ item }) => (
-            <View style={styles.historyCard}>
-              <View style={styles.historyRow}>
-                <View style={styles.statusGroup}>
-                  <Text style={styles.statusEmoji}>
-                    {STATUS_META[item.physicalStatus].emoji}{' '}
-                    {STATUS_META[item.mentalStatus].emoji}
-                  </Text>
-                  <Text style={styles.statusLabel}>
-                    Body: {STATUS_META[item.physicalStatus].short} · Mind:{' '}
-                    {STATUS_META[item.mentalStatus].short}
+          renderItem={({ item }) => {
+            // Use the worse of the two statuses for the accent colour
+            const order = ['need_help', 'not_great', 'okay', 'great'];
+            const worst = order.find(
+              (s) => s === item.physicalStatus || s === item.mentalStatus
+            ) as typeof item.physicalStatus;
+            const accent = STATUS_META[worst];
+            return (
+              <View style={[styles.historyCard, { borderLeftColor: accent.color }]}>
+                <View style={styles.historyRow}>
+                  <View style={styles.statusGroup}>
+                    <View style={styles.emojiRow}>
+                      <Text style={styles.statusEmoji}>{STATUS_META[item.physicalStatus].emoji}</Text>
+                      <Text style={styles.statusEmoji}>{STATUS_META[item.mentalStatus].emoji}</Text>
+                    </View>
+                    <Text style={styles.statusLabel}>
+                      Body: {STATUS_META[item.physicalStatus].short} · Mind:{' '}
+                      {STATUS_META[item.mentalStatus].short}
+                    </Text>
+                  </View>
+                  <Text style={styles.historyTime}>
+                    {new Date(item.createdAt).toLocaleTimeString('en-US', {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}
                   </Text>
                 </View>
-                <Text style={styles.historyTime}>
-                  {new Date(item.createdAt).toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </Text>
+                {item.note ? <Text style={styles.historyNote}>"{item.note}"</Text> : null}
               </View>
-              {item.note ? <Text style={styles.historyNote}>"{item.note}"</Text> : null}
-            </View>
-          )}
+            );
+          }}
           stickySectionHeadersEnabled={false}
         />
       )}
@@ -168,6 +176,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 10,
+    borderLeftWidth: 4,
+  },
+  emojiRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: 2,
   },
   historyRow: {
     flexDirection: 'row',
@@ -179,8 +193,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   statusEmoji: {
-    fontSize: 24,
-    marginBottom: 2,
+    fontSize: 22,
   },
   statusLabel: {
     fontSize: 13,

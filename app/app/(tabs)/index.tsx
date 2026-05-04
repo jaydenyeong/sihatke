@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View, Pressable } from 'react-native';
+import { StyleSheet, Text, View, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -71,58 +71,72 @@ export default function HomeScreen() {
   const todaysCheckin = latest && isToday(latest.createdAt) ? latest : null;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.dateText}>{dateString}</Text>
-          <Text style={styles.greeting}>{greeting},</Text>
-          <Text style={styles.name}>{userName || 'Friend'} 👋</Text>
-        </View>
-        <View style={styles.avatar}>
-          <FontAwesome name="user-circle" size={56} color={theme.primary} />
-        </View>
-      </View>
-
-      {todaysCheckin ? (
-        <View style={styles.lastCheckinCard}>
-          <Text style={styles.lastCheckinLabel}>Today's last check-in</Text>
-          <View style={styles.lastCheckinRow}>
-            <Text style={styles.lastCheckinStatus}>
-              {STATUS_META[todaysCheckin.physicalStatus].emoji}{' '}
-              {STATUS_META[todaysCheckin.physicalStatus].label}
-            </Text>
-            <Text style={styles.lastCheckinTime}>
-              {new Date(todaysCheckin.createdAt).toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-              })}
-            </Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Green hero header */}
+        <View style={styles.hero}>
+          <View style={styles.heroTop}>
+            <View>
+              <Text style={styles.dateText}>{dateString}</Text>
+              <Text style={styles.greeting}>{greeting},</Text>
+              <Text style={styles.name}>{userName || 'Friend'} 👋</Text>
+            </View>
+            <View style={styles.avatarCircle}>
+              <FontAwesome name="user" size={28} color={theme.primary} />
+            </View>
           </View>
         </View>
-      ) : (
-        <View style={styles.lastCheckinCard}>
-          <Text style={styles.lastCheckinLabel}>No check-ins yet today</Text>
-          <Text style={styles.lastCheckinSubtext}>
-            Tap below to do your first check-in
-          </Text>
-        </View>
-      )}
 
-      <View style={styles.ctaCard}>
-        <FontAwesome name="heartbeat" size={48} color={theme.primary} />
-        <Text style={styles.ctaTitle}>How are you feeling?</Text>
-        <Text style={styles.ctaSubtext}>
-          Tap below to do your check-in — it only takes a few seconds.
-        </Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.ctaButton,
-            pressed && styles.ctaButtonPressed,
-          ]}
-          onPress={() => router.push('/checkin')}>
-          <Text style={styles.ctaButtonText}>Start Check-In</Text>
-        </Pressable>
-      </View>
+        <View style={styles.body}>
+          {/* Last check-in status */}
+          {todaysCheckin ? (
+            <View style={styles.statusCard}>
+              <Text style={styles.cardLabel}>Today's last check-in</Text>
+              <View style={styles.statusRow}>
+                <View style={[styles.statusBadge, { backgroundColor: STATUS_META[todaysCheckin.physicalStatus].bgColor }]}>
+                  <Text style={styles.statusBadgeEmoji}>{STATUS_META[todaysCheckin.physicalStatus].emoji}</Text>
+                  <Text style={[styles.statusBadgeText, { color: STATUS_META[todaysCheckin.physicalStatus].color }]}>
+                    {STATUS_META[todaysCheckin.physicalStatus].short}
+                  </Text>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: STATUS_META[todaysCheckin.mentalStatus].bgColor }]}>
+                  <Text style={styles.statusBadgeEmoji}>{STATUS_META[todaysCheckin.mentalStatus].emoji}</Text>
+                  <Text style={[styles.statusBadgeText, { color: STATUS_META[todaysCheckin.mentalStatus].color }]}>
+                    {STATUS_META[todaysCheckin.mentalStatus].short}
+                  </Text>
+                </View>
+                <Text style={styles.checkinTime}>
+                  {new Date(todaysCheckin.createdAt).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  })}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.statusCard}>
+              <Text style={styles.cardLabel}>No check-ins yet today</Text>
+              <Text style={styles.cardSubtext}>Tap below to share how you're feeling</Text>
+            </View>
+          )}
+
+          {/* CTA */}
+          <View style={styles.ctaCard}>
+            <FontAwesome name="heartbeat" size={44} color={theme.primary} />
+            <Text style={styles.ctaTitle}>How are you feeling?</Text>
+            <Text style={styles.ctaSubtext}>
+              It only takes a few seconds to let your loved ones know.
+            </Text>
+            <Pressable
+              style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaButtonPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Start check-in"
+              onPress={() => router.push('/checkin')}>
+              <Text style={styles.ctaButtonText}>Start Check-In</Text>
+            </Pressable>
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -131,73 +145,103 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.background,
-    paddingHorizontal: 20,
   },
-  header: {
+  hero: {
+    backgroundColor: theme.primary,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 36,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  heroTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginTop: 16,
-    marginBottom: 24,
   },
   dateText: {
-    fontSize: 14,
-    color: theme.primary,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.75)',
     fontWeight: '600',
     marginBottom: 4,
   },
   greeting: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
-    color: theme.textPrimary,
+    color: '#FFFFFF',
   },
   name: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
-    color: theme.primary,
+    color: '#FFFFFF',
   },
-  avatar: {
-    marginTop: 8,
-  },
-  lastCheckinCard: {
-    backgroundColor: theme.card,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  lastCheckinLabel: {
-    fontSize: 14,
-    color: theme.textSecondary,
-    marginBottom: 8,
-  },
-  lastCheckinSubtext: {
-    fontSize: 16,
-    color: theme.textSecondary,
+  avatarCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 4,
   },
-  lastCheckinRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  body: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 24,
+    marginTop: -12,
   },
-  lastCheckinStatus: {
-    fontSize: 18,
+  statusCard: {
+    backgroundColor: theme.card,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  cardLabel: {
+    fontSize: 13,
+    color: theme.textSecondary,
     fontWeight: '600',
-    color: theme.textPrimary,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  lastCheckinTime: {
-    fontSize: 14,
+  cardSubtext: {
+    fontSize: 16,
+    color: theme.textSecondary,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+  },
+  statusBadgeEmoji: {
+    fontSize: 20,
+  },
+  statusBadgeText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  checkinTime: {
+    marginLeft: 'auto',
+    fontSize: 13,
     color: theme.textSecondary,
   },
   ctaCard: {
     backgroundColor: theme.card,
     borderRadius: 20,
-    padding: 32,
+    padding: 28,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -209,7 +253,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: theme.textPrimary,
-    marginTop: 16,
+    marginTop: 14,
     marginBottom: 8,
   },
   ctaSubtext: {
@@ -217,13 +261,12 @@ const styles = StyleSheet.create({
     color: theme.textSecondary,
     textAlign: 'center',
     marginBottom: 24,
-    lineHeight: 22,
+    lineHeight: 23,
   },
   ctaButton: {
     backgroundColor: theme.cta,
     borderRadius: 16,
     paddingVertical: 18,
-    paddingHorizontal: 48,
     width: '100%',
     alignItems: 'center',
   },
