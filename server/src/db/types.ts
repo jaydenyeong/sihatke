@@ -39,6 +39,7 @@ export interface ContactRow {
   notify_on_missed: boolean;
   notify_on_decline: boolean;
   is_emergency: boolean;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }

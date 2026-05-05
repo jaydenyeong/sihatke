@@ -49,6 +49,7 @@ export function mapContact(row: ContactRow) {
     notifyOnMissed: row.notify_on_missed,
     notifyOnDecline: row.notify_on_decline,
     isEmergency: row.is_emergency,
+    sortOrder: row.sort_order,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
