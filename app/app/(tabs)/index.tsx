@@ -88,7 +88,6 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.body}>
-          {/* Last check-in status */}
           {todaysCheckin ? (
             <View style={styles.statusCard}>
               <Text style={styles.cardLabel}>Today's last check-in</Text>
@@ -120,7 +119,6 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* CTA */}
           <View style={styles.ctaCard}>
             <FontAwesome name="heartbeat" size={44} color={theme.primary} />
             <Text style={styles.ctaTitle}>How are you feeling?</Text>
@@ -137,6 +135,15 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Floating action button — secondary shortcut to check-in */}
+      <Pressable
+        style={({ pressed }) => [styles.fab, pressed && { opacity: 0.85 }]}
+        accessibilityRole="button"
+        accessibilityLabel="Quick check-in"
+        onPress={() => router.push('/checkin')}>
+        <Text style={styles.fabIcon}>+</Text>
+      </Pressable>
     </SafeAreaView>
   );
 }
@@ -278,5 +285,27 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '700',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: theme.cta,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  fabIcon: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '300',
+    lineHeight: 34,
   },
 });
