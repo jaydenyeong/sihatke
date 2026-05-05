@@ -159,6 +159,12 @@ export default function ContactsScreen() {
                 <Text style={styles.emergencyText}>Emergency</Text>
               </View>
             )}
+            {item.contactUserId && (
+              <View style={styles.sihatyBadge}>
+                <FontAwesome name="check-circle" size={11} color={theme.primary} />
+                <Text style={styles.sihatyBadgeText}>Sihaty</Text>
+              </View>
+            )}
           </View>
           {item.relationship ? (
             <Text style={styles.cardRelationship}>{item.relationship}</Text>
@@ -425,6 +431,20 @@ const styles = StyleSheet.create({
   },
   emergencyText: {
     color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  sihatyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: theme.primaryLight,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  sihatyBadgeText: {
+    color: theme.primary,
     fontSize: 11,
     fontWeight: '700',
   },

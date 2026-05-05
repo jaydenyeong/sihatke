@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { body } from 'express-validator';
 import { db } from '../db/supabase';
 import { mapContact } from '../db/mappers';
-import type { ContactRow } from '../db/types';
+import type { ContactRow, UserRow } from '../db/types';
 import { auth, AuthRequest } from '../middleware/auth';
 
 const router = Router();
@@ -17,6 +17,24 @@ const FIELD_MAP: Record<string, string> = {
   notifyOnDecline: 'notify_on_decline',
   isEmergency: 'is_emergency',
 };
+
+/**
+ * If a non-empty email is provided and matches a registered Sihaty user
+ * (other than the current user), return that user's id. Otherwise null.
+ */
+async function lookupContactUserId(
+  email: string | undefined,
+  selfId: string
+): Promise<string | null> {
+  if (!email) return null;
+  const { data } = await db()
+    .from('users')
+    .select('id')
+    .eq('email', email.toLowerCase().trim())
+    .neq('id', selfId)
+    .maybeSingle();
+  return data ? (data as Pick<UserRow, 'id'>).id : null;
+}
 
 // GET /api/contacts
 router.get('/', auth, async (req: AuthRequest, res: Response) => {
@@ -53,9 +71,12 @@ router.post(
   ],
   async (req: AuthRequest, res: Response) => {
     try {
+      const contactUserId = await lookupContactUserId(req.body.email, req.userId!);
+
       const insert: Record<string, unknown> = {
         user_id: req.userId!,
         name: req.body.name,
+        contact_user_id: contactUserId,
       };
       if (req.body.phone !== undefined) insert.phone = req.body.phone;
       if (req.body.email !== undefined) insert.email = req.body.email;
@@ -91,6 +112,11 @@ router.put('/:id', auth, async (req: AuthRequest, res: Response) => {
     const updates: Record<string, unknown> = {};
     for (const [apiKey, dbKey] of Object.entries(FIELD_MAP)) {
       if (req.body[apiKey] !== undefined) updates[dbKey] = req.body[apiKey];
+    }
+
+    // Re-resolve contact_user_id whenever email changes
+    if (req.body.email !== undefined) {
+      updates.contact_user_id = await lookupContactUserId(req.body.email, req.userId!);
     }
 
     if (Object.keys(updates).length === 0) {

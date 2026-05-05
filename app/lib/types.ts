@@ -14,11 +14,18 @@ export interface Contact {
   phone?: string;
   email?: string;
   relationship?: string;
+  contactUserId?: string;
   notifyOnHelp: boolean;
   notifyOnMissed: boolean;
   notifyOnDecline: boolean;
   isEmergency: boolean;
   createdAt: string;
+}
+
+export interface CircleMember {
+  _id: string;
+  fullName: string;
+  latestCheckin: Checkin | null;
 }
 
 export type AlertType = 'need_help' | 'missed_checkin' | 'decline_pattern';
