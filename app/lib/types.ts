@@ -19,6 +19,7 @@ export interface Contact {
   notifyOnMissed: boolean;
   notifyOnDecline: boolean;
   isEmergency: boolean;
+  sortOrder: number;
   createdAt: string;
 }
 
