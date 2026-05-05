@@ -1,7 +1,6 @@
 import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
-
 import Colors from '@/constants/Colors';
 
 function TabBarIcon(props: {
@@ -30,7 +29,7 @@ export default function TabLayout() {
           paddingTop: 8,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 13,
           fontWeight: '600',
         },
         headerShown: false,
@@ -43,27 +42,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="checkin"
-        options={{
-          title: 'Check-In',
-          tabBarIcon: ({ color }) => <TabBarIcon name="check-circle" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: 'History',
-          tabBarIcon: ({ color }) => <TabBarIcon name="calendar" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="alerts"
-        options={{
-          title: 'Alerts',
-          tabBarIcon: ({ color }) => <TabBarIcon name="bell" color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="circle"
         options={{
           title: 'Circle',
@@ -71,10 +49,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="contacts"
+        name="history"
         options={{
-          title: 'Contacts',
-          tabBarIcon: ({ color }) => <TabBarIcon name="users" color={color} />,
+          title: 'History',
+          tabBarIcon: ({ color }) => <TabBarIcon name="calendar" color={color} />,
         }}
       />
       <Tabs.Screen
