@@ -5,8 +5,6 @@ import {
   View,
   FlatList,
   RefreshControl,
-  Pressable,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
