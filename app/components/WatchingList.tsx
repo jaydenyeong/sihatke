@@ -97,6 +97,7 @@ export function WatchingList({ editing }: Props) {
 
   const move = useCallback(async (index: number, direction: 'up' | 'down') => {
     const toIndex = direction === 'up' ? index - 1 : index + 1;
+    if (toIndex < 0 || toIndex >= members.length) return;
     const next = [...members];
     [next[index], next[toIndex]] = [next[toIndex], next[index]];
     const newOrder = next.map((m) => m._id);
