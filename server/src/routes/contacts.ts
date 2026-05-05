@@ -16,6 +16,7 @@ const FIELD_MAP: Record<string, string> = {
   notifyOnMissed: 'notify_on_missed',
   notifyOnDecline: 'notify_on_decline',
   isEmergency: 'is_emergency',
+  sortOrder: 'sort_order',
 };
 
 /**
@@ -43,7 +44,7 @@ router.get('/', auth, async (req: AuthRequest, res: Response) => {
       .from('contacts')
       .select('*')
       .eq('user_id', req.userId!)
-      .order('created_at', { ascending: false });
+      .order('sort_order', { ascending: true });
 
     if (error) {
       console.error('Contacts list error:', error);
@@ -73,10 +74,24 @@ router.post(
     try {
       const contactUserId = await lookupContactUserId(req.body.email, req.userId!);
 
+      // Get the next sort_order for this user (new contacts go to the bottom)
+      const { data: maxRow } = await db()
+        .from('contacts')
+        .select('sort_order')
+        .eq('user_id', req.userId!)
+        .order('sort_order', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const nextSortOrder = maxRow
+        ? (maxRow as { sort_order: number }).sort_order + 1
+        : 0;
+
       const insert: Record<string, unknown> = {
         user_id: req.userId!,
         name: req.body.name,
         contact_user_id: contactUserId,
+        sort_order: nextSortOrder,
       };
       if (req.body.phone !== undefined) insert.phone = req.body.phone;
       if (req.body.email !== undefined) insert.email = req.body.email;
