@@ -61,6 +61,7 @@ CREATE TABLE contacts (
   notify_on_missed   BOOLEAN NOT NULL DEFAULT TRUE,
   notify_on_decline  BOOLEAN NOT NULL DEFAULT FALSE,
   is_emergency       BOOLEAN NOT NULL DEFAULT FALSE,
+  sort_order         INT NOT NULL DEFAULT 0,
   created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
