@@ -104,13 +104,13 @@ export default function HomeScreen() {
                     {STATUS_META[todaysCheckin.mentalStatus].short}
                   </Text>
                 </View>
-                <Text style={styles.checkinTime}>
-                  {new Date(todaysCheckin.createdAt).toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </Text>
               </View>
+              <Text style={styles.checkinTime}>
+                {new Date(todaysCheckin.createdAt).toLocaleTimeString('en-US', {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+              </Text>
             </View>
           ) : (
             <View style={styles.statusCard}>
@@ -241,9 +241,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   checkinTime: {
-    marginLeft: 'auto',
     fontSize: 13,
     color: theme.textSecondary,
+    marginTop: 8,
   },
   ctaCard: {
     backgroundColor: theme.card,
