@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { db } from '../db/supabase';
 import type { UserRow } from '../db/types';
 import { sendPushToUsers } from './notificationService';
-import { triggerMissedCheckinAlert, runDeclinePatternCheck } from './alertService';
+import { triggerMissedCheckinAlert, runDeclinePatternCheck, runWeeklyWellnessSummary } from './alertService';
 
 // Window sizes (minutes)
 const REMINDER_LEAD_MIN = 0;   // fire at or after scheduled time
@@ -196,5 +196,11 @@ export function startSchedulers(): void {
       console.error('Decline pattern check failed:', err)
     );
   });
-  console.log('Schedulers started: reminders (15m), missed (1h), patterns (daily)');
+  // Every Sunday at 20:00 UTC — weekly wellness summary to contacts
+  cron.schedule('0 20 * * 0', () => {
+    runWeeklyWellnessSummary().catch((err) =>
+      console.error('Weekly summary failed:', err)
+    );
+  });
+  console.log('Schedulers started: reminders (15m), missed (1h), patterns (daily), summary (weekly)');
 }

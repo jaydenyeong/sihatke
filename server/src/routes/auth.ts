@@ -150,4 +150,27 @@ router.get('/me', auth, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// DELETE /api/auth/account
+// Permanently deletes the authenticated user and all their data.
+// ON DELETE CASCADE in the schema handles checkins, contacts, alerts, push_tokens.
+router.delete('/account', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { error } = await db()
+      .from('users')
+      .delete()
+      .eq('id', req.userId!);
+
+    if (error) {
+      console.error('Delete account error:', error);
+      res.status(500).json({ error: 'Server error' });
+      return;
+    }
+
+    res.json({ message: 'Account deleted' });
+  } catch (err) {
+    console.error('Delete account error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 export default router;

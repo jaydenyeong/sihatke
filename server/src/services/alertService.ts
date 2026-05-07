@@ -168,3 +168,73 @@ export async function runDeclinePatternCheck(): Promise<void> {
     }
   }
 }
+
+/**
+ * Weekly wellness summary — sent every Sunday evening to contacts who
+ * have any notification enabled. Summarises the sender's past 7 days.
+ */
+export async function runWeeklyWellnessSummary(): Promise<void> {
+  const windowStart = new Date(
+    Date.now() - 7 * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  const { data: users, error: userErr } = await db()
+    .from('users')
+    .select('id, full_name');
+
+  if (userErr || !users) {
+    console.error('Weekly summary user fetch error:', userErr);
+    return;
+  }
+
+  for (const user of users as Pick<UserRow, 'id' | 'full_name'>[]) {
+    // Get all check-ins in the last 7 days
+    const { data: checkins } = await db()
+      .from('checkins')
+      .select('physical_status, mental_status')
+      .eq('user_id', user.id)
+      .gte('created_at', windowStart);
+
+    if (!checkins || checkins.length === 0) continue;
+
+    const total = checkins.length;
+    const goodCount = checkins.filter(
+      (c: { physical_status: string; mental_status: string }) =>
+        ['great', 'okay'].includes(c.physical_status) &&
+        ['great', 'okay'].includes(c.mental_status)
+    ).length;
+    const concerningCount = checkins.filter(
+      (c: { physical_status: string; mental_status: string }) =>
+        c.physical_status === 'need_help' || c.mental_status === 'need_help' ||
+        c.physical_status === 'not_great' || c.mental_status === 'not_great'
+    ).length;
+
+    const isGoodWeek = goodCount >= Math.ceil(total / 2);
+    const body = isGoodWeek
+      ? `${user.full_name} had a good week — ${total}/7 check-ins, ${goodCount} positive days 😊`
+      : `${user.full_name} had some difficult days — ${total}/7 check-ins, ${concerningCount} concerning days 💛`;
+
+    // Send to all linked contacts (any notification preference enabled)
+    const { data: contacts } = await db()
+      .from('contacts')
+      .select('contact_user_id')
+      .eq('user_id', user.id)
+      .or('notify_on_help.eq.true,notify_on_missed.eq.true,notify_on_decline.eq.true')
+      .not('contact_user_id', 'is', null);
+
+    if (!contacts || contacts.length === 0) continue;
+
+    const contactUserIds = (contacts as Pick<ContactRow, 'contact_user_id'>[])
+      .map((c) => c.contact_user_id)
+      .filter((id): id is string => !!id);
+
+    if (contactUserIds.length > 0) {
+      await sendPushToUsers(
+        contactUserIds,
+        'Weekly Summary',
+        body,
+        { kind: 'weekly_summary' }
+      );
+    }
+  }
+}

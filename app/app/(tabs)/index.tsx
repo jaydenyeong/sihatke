@@ -45,19 +45,22 @@ export default function HomeScreen() {
 
   const [userName, setUserName] = useState('');
   const [latest, setLatest] = useState<Checkin | null>(null);
+  const [hasContacts, setHasContacts] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       (async () => {
         try {
-          const [me, last] = await Promise.all([
+          const [me, last, contacts] = await Promise.all([
             apiRequest<Me>('/auth/me'),
             apiRequest<Checkin | null>('/checkins/latest'),
+            apiRequest<{ length: number }>('/contacts'),
           ]);
           if (cancelled) return;
           setUserName(me.fullName || '');
           setLatest(last);
+          setHasContacts(Array.isArray(contacts) && (contacts as unknown[]).length > 0);
         } catch {
           // Silent — auth guard handles 401s; other errors leave stale state.
         }
@@ -117,6 +120,23 @@ export default function HomeScreen() {
               <Text style={styles.cardLabel}>No check-ins yet today</Text>
               <Text style={styles.cardSubtext}>Tap below to share how you're feeling</Text>
             </View>
+          )}
+
+          {!hasContacts && (
+            <Pressable
+              style={({ pressed }) => [styles.nudgeCard, pressed && { opacity: 0.85 }]}
+              onPress={() => router.push('/contacts')}
+              accessibilityRole="button"
+              accessibilityLabel="Add your first trusted contact">
+              <FontAwesome name="users" size={22} color={theme.primary} />
+              <View style={styles.nudgeBody}>
+                <Text style={styles.nudgeTitle}>Add a trusted contact</Text>
+                <Text style={styles.nudgeSubtext}>
+                  So someone you trust can be notified when it matters.
+                </Text>
+              </View>
+              <FontAwesome name="chevron-right" size={14} color={theme.textSecondary} />
+            </Pressable>
           )}
 
           <View style={styles.ctaCard}>
@@ -244,6 +264,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.textSecondary,
     marginTop: 8,
+  },
+  nudgeCard: {
+    backgroundColor: theme.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderLeftWidth: 4,
+    borderLeftColor: theme.primary,
+  },
+  nudgeBody: {
+    flex: 1,
+  },
+  nudgeTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.textPrimary,
+    marginBottom: 2,
+  },
+  nudgeSubtext: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    lineHeight: 20,
   },
   ctaCard: {
     backgroundColor: theme.card,

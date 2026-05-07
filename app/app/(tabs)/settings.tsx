@@ -141,6 +141,29 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all your data — check-ins, contacts, and alerts. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Forever',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiRequest('/auth/account', { method: 'DELETE' });
+              await clearToken();
+              router.replace('/welcome');
+            } catch (err) {
+              Alert.alert('Error', err instanceof ApiError ? err.message : 'Could not delete account');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, styles.centered]}>
@@ -274,6 +297,14 @@ export default function SettingsScreen() {
           style={({ pressed }) => [styles.logoutButton, pressed && { opacity: 0.7 }]}>
           <FontAwesome name="sign-out" size={18} color={theme.danger} />
           <Text style={styles.logoutText}>Log Out</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={handleDeleteAccount}
+          accessibilityRole="button"
+          accessibilityLabel="Delete account"
+          style={({ pressed }) => [styles.deleteButton, pressed && { opacity: 0.7 }]}>
+          <Text style={styles.deleteText}>Delete Account</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -433,5 +464,15 @@ const styles = StyleSheet.create({
     fontSize: 17,
     color: theme.danger,
     fontWeight: '600',
+  },
+  deleteButton: {
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  deleteText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    textDecorationLine: 'underline',
   },
 });
