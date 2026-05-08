@@ -151,10 +151,33 @@ router.get('/me', auth, async (req: AuthRequest, res: Response) => {
 });
 
 // DELETE /api/auth/account
-// Permanently deletes the authenticated user and all their data.
-// ON DELETE CASCADE in the schema handles checkins, contacts, alerts, push_tokens.
+// Requires { password } in body to confirm identity before deletion.
+// ON DELETE CASCADE handles checkins, contacts, alerts, push_tokens.
 router.delete('/account', auth, async (req: AuthRequest, res: Response) => {
+  const { password } = req.body;
+  if (!password) {
+    res.status(400).json({ error: 'Password is required to delete your account' });
+    return;
+  }
+
   try {
+    const { data } = await db()
+      .from('users')
+      .select('password_hash')
+      .eq('id', req.userId!)
+      .maybeSingle();
+
+    if (!data) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const match = await bcrypt.compare(password, (data as { password_hash: string }).password_hash);
+    if (!match) {
+      res.status(401).json({ error: 'Incorrect password' });
+      return;
+    }
+
     const { error } = await db()
       .from('users')
       .delete()

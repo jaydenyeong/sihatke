@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -12,10 +12,11 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '@/constants/Colors';
 import { apiRequest } from '@/lib/api';
+import { getUserId } from '@/lib/auth';
 import { STATUS_META } from '@/lib/status';
 import type { CircleMember } from '@/lib/types';
 
-const ORDER_KEY = 'watching_order';
+const orderKey = (userId: string) => `watching_order_${userId}`;
 const STATUS_PRIORITY = ['need_help', 'not_great', 'okay', 'great'];
 
 function isToday(iso: string): boolean {
@@ -37,17 +38,19 @@ function relativeTime(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-async function loadSavedOrder(): Promise<string[]> {
+async function loadSavedOrder(userId: string): Promise<string[]> {
   try {
-    const raw = await AsyncStorage.getItem(ORDER_KEY);
+    const raw = await AsyncStorage.getItem(orderKey(userId));
     return raw ? (JSON.parse(raw) as string[]) : [];
   } catch {
     return [];
   }
 }
 
-async function persistOrder(ids: string[]): Promise<void> {
-  await AsyncStorage.setItem(ORDER_KEY, JSON.stringify(ids));
+async function persistOrder(userId: string, ids: string[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(orderKey(userId), JSON.stringify(ids));
+  } catch { /* Silent — order is a UX nicety, not critical */ }
 }
 
 function applyOrder(members: CircleMember[], order: string[]): CircleMember[] {
@@ -72,14 +75,17 @@ export function WatchingList({ editing }: Props) {
   const [members, setMembers] = useState<CircleMember[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const userIdRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [res, savedOrder] = await Promise.all([
+      const [res, uid] = await Promise.all([
         apiRequest<CircleMember[]>('/circle'),
-        loadSavedOrder(),
+        getUserId(),
       ]);
-      setMembers(applyOrder(res, savedOrder));
+      userIdRef.current = uid;
+      const order = uid ? await loadSavedOrder(uid) : [];
+      setMembers(applyOrder(res, order));
     } catch {
       // Silent — auth guard handles 401s
     } finally {
@@ -102,7 +108,7 @@ export function WatchingList({ editing }: Props) {
     [next[index], next[toIndex]] = [next[toIndex], next[index]];
     const newOrder = next.map((m) => m._id);
     setMembers(next);
-    await persistOrder(newOrder);
+    if (userIdRef.current) await persistOrder(userIdRef.current, newOrder);
   }, [members]);
 
   if (loaded && members.length === 0) {

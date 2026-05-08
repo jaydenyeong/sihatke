@@ -139,6 +139,7 @@ export function MyContactsList({ editing }: Props) {
   const move = useCallback(async (index: number, direction: 'up' | 'down') => {
     const toIndex = direction === 'up' ? index - 1 : index + 1;
     if (toIndex < 0 || toIndex >= contacts.length) return;
+    const prev = [...contacts];
     const next = [...contacts];
     const fromSortOrder = next[index].sortOrder;
     const toSortOrder = next[toIndex].sortOrder;
@@ -147,10 +148,14 @@ export function MyContactsList({ editing }: Props) {
     next[index] = updatedTo;
     next[toIndex] = updatedFrom;
     setContacts(next);
-    await Promise.all([
-      apiRequest(`/contacts/${updatedFrom._id}`, { method: 'PUT', body: { sortOrder: updatedFrom.sortOrder } }),
-      apiRequest(`/contacts/${updatedTo._id}`, { method: 'PUT', body: { sortOrder: updatedTo.sortOrder } }),
-    ]);
+    try {
+      await Promise.all([
+        apiRequest(`/contacts/${updatedFrom._id}`, { method: 'PUT', body: { sortOrder: updatedFrom.sortOrder } }),
+        apiRequest(`/contacts/${updatedTo._id}`, { method: 'PUT', body: { sortOrder: updatedTo.sortOrder } }),
+      ]);
+    } catch {
+      setContacts(prev);
+    }
   }, [contacts]);
 
   const updateField = (key: keyof typeof EMPTY_FORM, value: string | boolean) => {

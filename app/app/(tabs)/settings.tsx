@@ -8,6 +8,9 @@ import {
   Alert,
   TextInput,
   ActivityIndicator,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -45,6 +48,10 @@ export default function SettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [frequency, setFrequency] = useState(1);
@@ -142,26 +149,31 @@ export default function SettingsScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'This will permanently delete your account and all your data — check-ins, contacts, and alerts. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Forever',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await apiRequest('/auth/account', { method: 'DELETE' });
-              await clearToken();
-              router.replace('/welcome');
-            } catch (err) {
-              Alert.alert('Error', err instanceof ApiError ? err.message : 'Could not delete account');
-            }
-          },
-        },
-      ]
-    );
+    setDeletePassword('');
+    setDeleteError('');
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!deletePassword) {
+      setDeleteError('Please enter your password');
+      return;
+    }
+    setDeleteError('');
+    setDeleting(true);
+    try {
+      await apiRequest('/auth/account', {
+        method: 'DELETE',
+        body: { password: deletePassword },
+      });
+      await clearToken();
+      setDeleteModalVisible(false);
+      router.replace('/welcome');
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : 'Could not delete account');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (loading) {
@@ -307,6 +319,47 @@ export default function SettingsScreen() {
           <Text style={styles.deleteText}>Delete Account</Text>
         </Pressable>
       </ScrollView>
+
+      <Modal
+        visible={deleteModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setDeleteModalVisible(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.deleteModal}>
+          <View style={styles.deleteModalInner}>
+            <Text style={styles.deleteModalTitle}>Delete Account</Text>
+            <Text style={styles.deleteModalBody}>
+              This permanently deletes your account and all your data — check-ins, contacts, and alerts. This cannot be undone.
+            </Text>
+            <Text style={styles.label}>Enter your password to confirm</Text>
+            <TextInput
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              style={styles.input}
+              placeholder="Your password"
+              placeholderTextColor={theme.textSecondary}
+              secureTextEntry
+              autoFocus
+            />
+            {deleteError ? <Text style={styles.error}>{deleteError}</Text> : null}
+            <Pressable
+              onPress={confirmDeleteAccount}
+              disabled={deleting}
+              style={({ pressed }) => [styles.deleteConfirmBtn, (pressed || deleting) && { opacity: 0.8 }]}>
+              <Text style={styles.deleteConfirmText}>
+                {deleting ? 'Deleting…' : 'Delete Forever'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setDeleteModalVisible(false)}
+              style={({ pressed }) => [styles.deleteCancelBtn, pressed && { opacity: 0.7 }]}>
+              <Text style={styles.deleteCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -474,5 +527,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.textSecondary,
     textDecorationLine: 'underline',
+  },
+  deleteModal: {
+    flex: 1,
+    backgroundColor: theme.background,
+  },
+  deleteModalInner: {
+    flex: 1,
+    padding: 24,
+    paddingTop: 40,
+  },
+  deleteModalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: theme.danger,
+    marginBottom: 12,
+  },
+  deleteModalBody: {
+    fontSize: 16,
+    color: theme.textSecondary,
+    lineHeight: 23,
+    marginBottom: 24,
+  },
+  deleteConfirmBtn: {
+    backgroundColor: theme.danger,
+    borderRadius: 14,
+    paddingVertical: 18,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  deleteConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  deleteCancelBtn: {
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  deleteCancelText: {
+    fontSize: 16,
+    color: theme.textSecondary,
   },
 });
