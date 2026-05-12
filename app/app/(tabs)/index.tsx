@@ -125,7 +125,7 @@ export default function HomeScreen() {
           {!hasContacts && (
             <Pressable
               style={({ pressed }) => [styles.nudgeCard, pressed && { opacity: 0.85 }]}
-              onPress={() => router.push('/contacts')}
+              onPress={() => router.push('/circle')}
               accessibilityRole="button"
               accessibilityLabel="Add your first trusted contact">
               <FontAwesome name="users" size={22} color={theme.primary} />
