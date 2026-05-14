@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: theme.cta,
+    backgroundColor: theme.primary,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
