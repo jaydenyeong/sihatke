@@ -42,7 +42,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="Checkin"
+        name="checkin"
         options={{ href: null }}
       />
       <Tabs.Screen
