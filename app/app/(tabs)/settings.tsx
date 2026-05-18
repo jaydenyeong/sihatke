@@ -449,10 +449,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   timeChip: {
-    minWidth: 80,
-    paddingVertical: 14,
+    minWidth: 88,
+    paddingVertical: 18,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: theme.background,
     borderWidth: 2,
     borderColor: theme.border,

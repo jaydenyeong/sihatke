@@ -243,10 +243,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   timeChip: {
-    minWidth: 84,
-    paddingVertical: 16,
+    minWidth: 88,
+    paddingVertical: 18,
     paddingHorizontal: 18,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: theme.card,
     borderWidth: 2,
     borderColor: theme.border,

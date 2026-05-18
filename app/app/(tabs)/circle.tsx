@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '@/constants/Colors';
 import { WatchingList } from '@/components/WatchingList';
 import { MyContactsList } from '@/components/MyContactsList';
+import { Pressable } from 'react-native';
 
 type Tab = 'watching' | 'contacts';
 
@@ -20,11 +21,14 @@ export default function CircleScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>My Circle</Text>
-        <Pressable
-          style={({ pressed }) => [styles.editBtn, pressed && { opacity: 0.7 }]}
-          onPress={() => setEditing((e) => !e)}>
-          <Text style={styles.editBtnText}>{editing ? 'Done' : 'Edit Order'}</Text>
-        </Pressable>
+        {/* Edit Order only shown on My Contacts tab */}
+        {activeTab === 'contacts' && (
+          <Pressable
+            style={({ pressed }) => [styles.editBtn, pressed && { opacity: 0.7 }]}
+            onPress={() => setEditing((e) => !e)}>
+            <Text style={styles.editBtnText}>{editing ? 'Done' : 'Edit Order'}</Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.segControl}>
@@ -62,6 +66,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 12,
+    minHeight: 60,
   },
   title: { fontSize: 28, fontWeight: '700', color: theme.textPrimary },
   editBtn: {

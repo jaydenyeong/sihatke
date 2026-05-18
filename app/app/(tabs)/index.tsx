@@ -158,15 +158,6 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
-
-      {/* Floating action button — secondary shortcut to check-in */}
-      <Pressable
-        style={({ pressed }) => [styles.fab, pressed && { opacity: 0.85 }]}
-        accessibilityRole="button"
-        accessibilityLabel="Quick check-in"
-        onPress={() => router.push('/checkin')}>
-        <Text style={styles.fabIcon}>+</Text>
-      </Pressable>
     </SafeAreaView>
   );
 }
@@ -203,7 +194,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   dotEmpty: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.6)',
   },
   streakText: {
     fontSize: 14,
@@ -251,11 +244,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+    ...theme.cardShadow,
   },
   cardLabel: {
     fontSize: 13,
@@ -324,11 +313,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 28,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    ...theme.cardShadow,
   },
   ctaTitle: {
     fontSize: 24,
@@ -359,27 +344,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '700',
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: theme.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  fabIcon: {
-    color: '#FFFFFF',
-    fontSize: 30,
-    fontWeight: '300',
-    lineHeight: 34,
   },
 });
