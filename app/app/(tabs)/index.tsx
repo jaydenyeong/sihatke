@@ -45,19 +45,24 @@ export default function HomeScreen() {
 
   const [userName, setUserName] = useState('');
   const [latest, setLatest] = useState<Checkin | null>(null);
+  const [streak, setStreak] = useState(0);
+  const [weekDots, setWeekDots] = useState<boolean[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       (async () => {
         try {
-          const [me, last] = await Promise.all([
+          const [me, last, stats] = await Promise.all([
             apiRequest<Me>('/auth/me'),
             apiRequest<Checkin | null>('/checkins/latest'),
+            apiRequest<{ currentStreak: number; weekDots: boolean[] }>('/checkins/stats'),
           ]);
           if (cancelled) return;
           setUserName(me.fullName || '');
           setLatest(last);
+          setStreak(stats.currentStreak);
+          setWeekDots(stats.weekDots);
         } catch {
           // Silent — auth guard handles 401s; other errors leave stale state.
         }
@@ -76,6 +81,7 @@ export default function HomeScreen() {
         {/* Green hero header */}
         <View style={styles.hero}>
           <View style={styles.heroTop}>
+
             <View>
               <Text style={styles.dateText}>{dateString}</Text>
               <Text style={styles.greeting}>{greeting},</Text>
@@ -85,6 +91,23 @@ export default function HomeScreen() {
               <FontAwesome name="user" size={28} color={theme.primary} />
             </View>
           </View>
+
+          {/* Week dots + streak */}
+          {weekDots.length === 7 && (
+            <View style={styles.consistencyRow}>
+              <View style={styles.dotsRow}>
+                {weekDots.map((filled, i) => (
+                  <View
+                    key={i}
+                    style={[styles.dot, filled ? styles.dotFilled : styles.dotEmpty]}
+                  />
+                ))}
+              </View>
+              {streak > 0 && (
+                <Text style={styles.streakText}>🔥 {streak} day{streak !== 1 ? 's' : ''}</Text>
+              )}
+            </View>
+          )}
         </View>
 
         <View style={styles.body}>
@@ -160,6 +183,32 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
+  },
+  consistencyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  dotFilled: {
+    backgroundColor: '#FFFFFF',
+  },
+  dotEmpty: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  streakText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   heroTop: {
     flexDirection: 'row',

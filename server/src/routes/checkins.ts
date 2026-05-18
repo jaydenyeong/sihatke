@@ -2,11 +2,64 @@ import { Router, Response } from 'express';
 import { body } from 'express-validator';
 import { db } from '../db/supabase';
 import { mapCheckin } from '../db/mappers';
-import type { CheckinRow } from '../db/types';
+import type { CheckinRow, UserRow } from '../db/types';
 import { auth, AuthRequest } from '../middleware/auth';
 import { triggerNeedHelpAlert } from '../services/alertService';
+import { sendPushToUsers } from '../services/notificationService';
 
 const router = Router();
+
+const MILESTONE_DAYS = [7, 30, 100];
+const MILESTONE_MESSAGES: Record<number, string> = {
+  7:   'One whole week of check-ins — keep it up! 🌟',
+  30:  'A whole month! Your family is so grateful. 🎉',
+  100: '100 days strong — you\'re an inspiration! 💪',
+};
+
+function localDateString(tz: string, date: Date): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
+}
+
+async function computeStreak(userId: string, tz: string): Promise<number> {
+  const windowStart = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString();
+  const { data } = await db()
+    .from('checkins')
+    .select('created_at')
+    .eq('user_id', userId)
+    .gte('created_at', windowStart);
+
+  const checkinDates = new Set<string>();
+  for (const c of (data ?? []) as { created_at: string }[]) {
+    checkinDates.add(localDateString(tz, new Date(c.created_at)));
+  }
+
+  const todayLocal = localDateString(tz, new Date());
+  const yesterdayLocal = localDateString(tz, new Date(Date.now() - 86400000));
+
+  // If neither today nor yesterday has a check-in, streak is 0
+  const startOffset = checkinDates.has(todayLocal) ? 0
+    : checkinDates.has(yesterdayLocal) ? 1
+    : -1;
+
+  if (startOffset < 0) return 0;
+
+  let streak = 0;
+  for (let i = startOffset; i < 35; i++) {
+    const day = localDateString(tz, new Date(Date.now() - i * 86400000));
+    if (checkinDates.has(day)) streak++;
+    else break;
+  }
+  return streak;
+}
 
 // POST /api/checkins
 router.post(
@@ -36,14 +89,39 @@ router.post(
         return;
       }
 
+      const userId = req.userId!;
+
       if (
         req.body.physicalStatus === 'need_help' ||
         req.body.mentalStatus === 'need_help'
       ) {
-        triggerNeedHelpAlert(req.userId!).catch((err) =>
+        triggerNeedHelpAlert(userId).catch((err) =>
           console.error('Alert trigger failed:', err)
         );
       }
+
+      // Fire-and-forget: check for milestone streak
+      (async () => {
+        try {
+          const { data: user } = await db()
+            .from('users')
+            .select('timezone')
+            .eq('id', userId)
+            .maybeSingle();
+          const tz = (user as Pick<UserRow, 'timezone'> | null)?.timezone || 'UTC';
+          const streak = await computeStreak(userId, tz);
+          if (MILESTONE_DAYS.includes(streak)) {
+            await sendPushToUsers(
+              [userId],
+              `${streak}-Day Streak! 🎉`,
+              MILESTONE_MESSAGES[streak],
+              { kind: 'milestone', streak }
+            );
+          }
+        } catch (err) {
+          console.error('Milestone check failed:', err);
+        }
+      })();
 
       res.status(201).json(mapCheckin(data as CheckinRow));
     } catch (err) {
@@ -104,6 +182,64 @@ router.get('/latest', auth, async (req: AuthRequest, res: Response) => {
     res.json(data ? mapCheckin(data as CheckinRow) : null);
   } catch (err) {
     console.error('Latest checkin error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/checkins/stats
+// Returns currentStreak, weekDots (7 booleans, oldest→today), totalCheckins
+router.get('/stats', auth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { data: user } = await db()
+      .from('users')
+      .select('timezone')
+      .eq('id', req.userId!)
+      .maybeSingle();
+    const tz = (user as Pick<UserRow, 'timezone'> | null)?.timezone || 'UTC';
+
+    const windowStart = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString();
+    const [{ data: checkins }, { count: total }] = await Promise.all([
+      db()
+        .from('checkins')
+        .select('created_at')
+        .eq('user_id', req.userId!)
+        .gte('created_at', windowStart),
+      db()
+        .from('checkins')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', req.userId!),
+    ]);
+
+    const checkinDates = new Set<string>();
+    for (const c of (checkins ?? []) as { created_at: string }[]) {
+      checkinDates.add(localDateString(tz, new Date(c.created_at)));
+    }
+
+    // Week dots: 7 days, index 0 = 6 days ago, index 6 = today
+    const weekDots = Array.from({ length: 7 }, (_, i) => {
+      const day = localDateString(tz, new Date(Date.now() - (6 - i) * 86400000));
+      return checkinDates.has(day);
+    });
+
+    // Streak
+    const todayLocal = localDateString(tz, new Date());
+    const yesterdayLocal = localDateString(tz, new Date(Date.now() - 86400000));
+    const startOffset = checkinDates.has(todayLocal) ? 0
+      : checkinDates.has(yesterdayLocal) ? 1
+      : -1;
+
+    let currentStreak = 0;
+    if (startOffset >= 0) {
+      for (let i = startOffset; i < 35; i++) {
+        const day = localDateString(tz, new Date(Date.now() - i * 86400000));
+        if (checkinDates.has(day)) currentStreak++;
+        else break;
+      }
+    }
+
+    res.json({ currentStreak, weekDots, totalCheckins: total ?? 0 });
+  } catch (err) {
+    console.error('Stats error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
