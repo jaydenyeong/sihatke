@@ -1,5 +1,9 @@
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View, Pressable, ScrollView } from 'react-native';
+import { LayoutAnimation, Platform, UIManager, StyleSheet, Text, View, Pressable, ScrollView } from 'react-native';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -47,6 +51,12 @@ export default function HomeScreen() {
   const [latest, setLatest] = useState<Checkin | null>(null);
   const [streak, setStreak] = useState(0);
   const [weekDots, setWeekDots] = useState<boolean[]>([]);
+  const [heroExpanded, setHeroExpanded] = useState(true);
+
+  const toggleHero = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setHeroExpanded((v) => !v);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -78,37 +88,49 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Green hero header */}
-        <View style={styles.hero}>
-          <View style={styles.heroTop}>
-
-            <View>
-              <Text style={styles.dateText}>{dateString}</Text>
-              <Text style={styles.greeting}>{greeting},</Text>
-              <Text style={styles.name}>{userName || 'Friend'} 👋</Text>
-            </View>
-            <View style={styles.avatarCircle}>
-              <FontAwesome name="user" size={28} color={theme.primary} />
-            </View>
-          </View>
-
-          {/* Week dots + streak */}
-          {weekDots.length === 7 && (
-            <View style={styles.consistencyRow}>
-              <View style={styles.dotsRow}>
-                {weekDots.map((filled, i) => (
-                  <View
-                    key={i}
-                    style={[styles.dot, filled ? styles.dotFilled : styles.dotEmpty]}
-                  />
-                ))}
+        {/* Green hero header — tap chevron to collapse */}
+        <Pressable style={styles.hero} onPress={toggleHero} accessibilityRole="button" accessibilityLabel={heroExpanded ? 'Collapse header' : 'Expand header'}>
+          {heroExpanded ? (
+            <>
+              <View style={styles.heroTop}>
+                <View>
+                  <Text style={styles.dateText}>{dateString}</Text>
+                  <Text style={styles.greeting}>{greeting},</Text>
+                  <Text style={styles.name}>{userName || 'Friend'} 👋</Text>
+                </View>
+                <View style={styles.avatarCircle}>
+                  <FontAwesome name="user" size={28} color={theme.primary} />
+                </View>
               </View>
+              {weekDots.length === 7 && (
+                <View style={styles.consistencyRow}>
+                  <View style={styles.dotsRow}>
+                    {weekDots.map((filled, i) => (
+                      <View key={i} style={[styles.dot, filled ? styles.dotFilled : styles.dotEmpty]} />
+                    ))}
+                  </View>
+                  {streak > 0 && (
+                    <Text style={styles.streakText}>🔥 {streak} day{streak !== 1 ? 's' : ''}</Text>
+                  )}
+                </View>
+              )}
+            </>
+          ) : (
+            <View style={styles.heroCompact}>
+              <Text style={styles.heroCompactName}>{greeting}, {userName || 'Friend'} 👋</Text>
               {streak > 0 && (
-                <Text style={styles.streakText}>🔥 {streak} day{streak !== 1 ? 's' : ''}</Text>
+                <Text style={styles.streakText}>🔥 {streak}</Text>
               )}
             </View>
           )}
-        </View>
+          <View style={styles.heroChevron}>
+            <FontAwesome
+              name={heroExpanded ? 'chevron-up' : 'chevron-down'}
+              size={11}
+              color="rgba(255,255,255,0.6)"
+            />
+          </View>
+        </Pressable>
 
         <View style={styles.body}>
           {todaysCheckin ? (
@@ -171,9 +193,24 @@ const styles = StyleSheet.create({
     backgroundColor: theme.primary,
     paddingHorizontal: 24,
     paddingTop: 20,
-    paddingBottom: 36,
+    paddingBottom: 28,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
+  },
+  heroCompact: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  heroCompactName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  heroChevron: {
+    alignItems: 'center',
+    marginTop: 10,
   },
   consistencyRow: {
     flexDirection: 'row',
