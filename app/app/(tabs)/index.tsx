@@ -40,6 +40,7 @@ function isToday(iso: string): boolean {
 
 interface Me {
   fullName: string;
+  checkinTimes: string[];
 }
 
 export default function HomeScreen() {
@@ -51,6 +52,7 @@ export default function HomeScreen() {
   const [latest, setLatest] = useState<Checkin | null>(null);
   const [streak, setStreak] = useState(0);
   const [weekDots, setWeekDots] = useState<boolean[]>([]);
+  const [checkinTimes, setCheckinTimes] = useState<string[]>([]);
   const [heroExpanded, setHeroExpanded] = useState(true);
 
   const toggleHero = () => {
@@ -70,6 +72,7 @@ export default function HomeScreen() {
           ]);
           if (cancelled) return;
           setUserName(me.fullName || '');
+          setCheckinTimes(me.checkinTimes ?? []);
           setLatest(last);
           setStreak(stats.currentStreak);
           setWeekDots(stats.weekDots);
@@ -133,6 +136,13 @@ export default function HomeScreen() {
         </Pressable>
 
         <View style={styles.body}>
+          {checkinTimes.length > 0 && (
+            <View style={styles.timesRow}>
+              <FontAwesome name="bell-o" size={13} color={theme.textSecondary} />
+              <Text style={styles.timesText}>{checkinTimes.join(' · ')}</Text>
+            </View>
+          )}
+
           {todaysCheckin ? (
             <View style={styles.statusCard}>
               <Text style={styles.cardLabel}>Today's last check-in</Text>
@@ -275,6 +285,18 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 24,
     marginTop: -12,
+  },
+  timesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  timesText: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    fontWeight: '500',
   },
   statusCard: {
     backgroundColor: theme.card,
