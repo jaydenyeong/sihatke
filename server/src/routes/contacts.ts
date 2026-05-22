@@ -17,6 +17,7 @@ const FIELD_MAP: Record<string, string> = {
   notifyOnDecline: 'notify_on_decline',
   isEmergency: 'is_emergency',
   sortOrder: 'sort_order',
+  status: 'status',
 };
 
 /**
@@ -72,9 +73,10 @@ router.post(
   ],
   async (req: AuthRequest, res: Response) => {
     try {
-      const contactUserId = await lookupContactUserId(req.body.email, req.userId!);
+      const isPending = req.body.pending === true;
+      const contactUserId = isPending ? null : await lookupContactUserId(req.body.email, req.userId!);
 
-      if (!contactUserId) {
+      if (!isPending && !contactUserId) {
         res.status(400).json({ error: 'No Sihaty account found with this email. Only registered users can be added as contacts.' });
         return;
       }
@@ -97,6 +99,7 @@ router.post(
         name: req.body.name,
         contact_user_id: contactUserId,
         sort_order: nextSortOrder,
+        status: isPending ? 'pending' : 'active',
       };
       if (req.body.phone !== undefined) insert.phone = req.body.phone;
       if (req.body.email !== undefined) insert.email = req.body.email;

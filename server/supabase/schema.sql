@@ -62,6 +62,7 @@ CREATE TABLE contacts (
   notify_on_decline  BOOLEAN NOT NULL DEFAULT FALSE,
   is_emergency       BOOLEAN NOT NULL DEFAULT FALSE,
   sort_order         INT NOT NULL DEFAULT 0,
+  status             TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pending')),
   created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );

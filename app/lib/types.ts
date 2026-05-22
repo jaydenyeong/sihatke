@@ -20,6 +20,7 @@ export interface Contact {
   notifyOnDecline: boolean;
   isEmergency: boolean;
   sortOrder: number;
+  status: 'active' | 'pending';
   createdAt: string;
 }
 

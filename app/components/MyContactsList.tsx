@@ -8,6 +8,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -51,6 +52,7 @@ export function MyContactsList({ editing }: Props) {
   const [formError, setFormError] = useState('');
   const [foundUser, setFoundUser] = useState<FoundUser | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -76,6 +78,7 @@ export function MyContactsList({ editing }: Props) {
     setForm(EMPTY_FORM);
     setFormError('');
     setFoundUser(null);
+    setNotFound(false);
     setModalVisible(true);
   };
 
@@ -102,17 +105,52 @@ export function MyContactsList({ editing }: Props) {
     if (!email) { setFormError('Enter an email address first'); return; }
     setFormError('');
     setFoundUser(null);
+    setNotFound(false);
     setLookingUp(true);
     try {
       const res = await apiRequest<FoundUser>(`/users/lookup?email=${encodeURIComponent(email)}`);
       setFoundUser(res);
-      // Auto-fill name if empty
       if (!form.name) updateField('name', res.fullName);
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'Could not look up user');
+      if (err instanceof ApiError && err.status === 404) {
+        setNotFound(true);
+      } else {
+        setFormError(err instanceof ApiError ? err.message : 'Could not look up user');
+      }
     } finally {
       setLookingUp(false);
     }
+  };
+
+  const handleInvite = async () => {
+    const email = form.email.trim();
+    const name = form.name.trim() || email;
+    try {
+      // Save as pending contact first
+      await apiRequest('/contacts', {
+        method: 'POST',
+        body: {
+          name,
+          email,
+          pending: true,
+          notifyOnHelp: form.notifyOnHelp,
+          notifyOnMissed: form.notifyOnMissed,
+          notifyOnDecline: form.notifyOnDecline,
+          isEmergency: form.isEmergency,
+        },
+      });
+      await load();
+      setModalVisible(false);
+    } catch {
+      // If duplicate invite, still open share
+    }
+    // Open native share sheet
+    await Share.share({
+      message:
+        `I'm using Sihaty to share my daily health check-ins with people I trust. ` +
+        `I'd love to add you so you can see how I'm doing! ` +
+        `Join me at https://sihaty-api.onrender.com`,
+    });
   };
 
   const handleSave = async () => {
@@ -209,8 +247,10 @@ export function MyContactsList({ editing }: Props) {
           lookingUp={lookingUp}
           formError={formError}
           foundUser={foundUser}
+          notFound={notFound}
           updateField={updateField}
           onLookup={handleLookup}
+          onInvite={handleInvite}
           onSave={handleSave}
           onClose={() => setModalVisible(false)}
         />
@@ -238,10 +278,16 @@ export function MyContactsList({ editing }: Props) {
                       <Text style={styles.emergencyText}>Emergency</Text>
                     </View>
                   )}
-                  {item.contactUserId && (
+                  {item.status === 'active' && item.contactUserId && (
                     <View style={styles.sihatyBadge}>
                       <FontAwesome name="check-circle" size={11} color={theme.primary} />
                       <Text style={styles.sihatyBadgeText}>Sihaty</Text>
+                    </View>
+                  )}
+                  {item.status === 'pending' && (
+                    <View style={styles.pendingBadge}>
+                      <FontAwesome name="clock-o" size={11} color="#D97706" />
+                      <Text style={styles.pendingBadgeText}>Invited</Text>
                     </View>
                   )}
                 </View>
@@ -302,8 +348,10 @@ export function MyContactsList({ editing }: Props) {
         lookingUp={lookingUp}
         formError={formError}
         foundUser={foundUser}
+        notFound={notFound}
         updateField={updateField}
         onLookup={handleLookup}
+        onInvite={handleInvite}
         onSave={handleSave}
         onClose={() => setModalVisible(false)}
       />
@@ -319,13 +367,15 @@ interface ModalProps {
   lookingUp: boolean;
   formError: string;
   foundUser: FoundUser | null;
+  notFound: boolean;
   updateField: (key: keyof typeof EMPTY_FORM, value: string | boolean) => void;
   onLookup: () => void;
+  onInvite: () => void;
   onSave: () => void;
   onClose: () => void;
 }
 
-function ContactModal({ visible, editing, form, saving, lookingUp, formError, foundUser, updateField, onLookup, onSave, onClose }: ModalProps) {
+function ContactModal({ visible, editing, form, saving, lookingUp, formError, foundUser, notFound, updateField, onLookup, onInvite, onSave, onClose }: ModalProps) {
   const canSave = !!foundUser;
 
   return (
@@ -367,6 +417,28 @@ function ContactModal({ visible, editing, form, saving, lookingUp, formError, fo
             <View style={styles.foundBanner}>
               <FontAwesome name="check-circle" size={16} color={theme.primary} />
               <Text style={styles.foundText}>{foundUser.fullName} — Sihaty user found ✓</Text>
+            </View>
+          )}
+
+          {notFound && !foundUser && (
+            <View style={styles.notFoundBanner}>
+              <Text style={styles.notFoundTitle}>Not on Sihaty yet</Text>
+              <Text style={styles.notFoundText}>
+                This email isn't registered. Invite them to join and they'll be automatically added when they sign up.
+              </Text>
+              <TextInput
+                style={[styles.input, { marginTop: 12 }]}
+                placeholder="Their name (optional)"
+                placeholderTextColor={theme.textSecondary}
+                value={form.name}
+                onChangeText={(v) => updateField('name', v)}
+              />
+              <Pressable
+                style={({ pressed }) => [styles.inviteBtn, pressed && { opacity: 0.85 }]}
+                onPress={onInvite}>
+                <FontAwesome name="share-alt" size={16} color="#FFFFFF" />
+                <Text style={styles.inviteBtnText}>Send Invite</Text>
+              </Pressable>
             </View>
           )}
 
@@ -457,6 +529,13 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: '600', color: theme.textPrimary, marginBottom: 8 },
   emptySubtext: { fontSize: 16, color: theme.textSecondary, textAlign: 'center', lineHeight: 22 },
+  pendingBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FEF3C7', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  pendingBadgeText: { color: '#D97706', fontSize: 11, fontWeight: '700' },
+  notFoundBanner: { backgroundColor: '#FEF3C7', borderRadius: 12, padding: 16, marginTop: 10, marginBottom: 4 },
+  notFoundTitle: { fontSize: 15, fontWeight: '700', color: '#92400E', marginBottom: 6 },
+  notFoundText: { fontSize: 14, color: '#92400E', lineHeight: 20 },
+  inviteBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.cta, borderRadius: 12, paddingVertical: 14, justifyContent: 'center', marginTop: 10 },
+  inviteBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   emailRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   emailInput: { flex: 1 },
   findBtn: {

@@ -7,6 +7,41 @@ import { mapUser } from '../db/mappers';
 import type { UserRow } from '../db/types';
 import { config } from '../config/env';
 import { auth, AuthRequest } from '../middleware/auth';
+import { sendPushToUsers } from '../services/notificationService';
+
+async function activatePendingContacts(
+  newUserId: string,
+  newUserEmail: string,
+  newUserName: string
+): Promise<void> {
+  // Find all pending contacts where the email matches the new user
+  const { data: pending } = await db()
+    .from('contacts')
+    .select('id, user_id, name')
+    .eq('email', newUserEmail)
+    .eq('status', 'pending');
+
+  if (!pending || pending.length === 0) return;
+
+  const ids = (pending as { id: string; user_id: string; name: string }[]).map((c) => c.id);
+  const inviterIds = [...new Set((pending as { id: string; user_id: string }[]).map((c) => c.user_id))];
+
+  // Activate contacts + link to the new user
+  await db()
+    .from('contacts')
+    .update({ status: 'active', contact_user_id: newUserId })
+    .in('id', ids);
+
+  // Push notification to each inviter
+  if (inviterIds.length > 0) {
+    await sendPushToUsers(
+      inviterIds,
+      'Invite accepted! 🎉',
+      `${newUserName} has joined Sihaty and is now in your contacts.`,
+      { kind: 'invite_accepted' }
+    );
+  }
+}
 
 const router = Router();
 
@@ -62,6 +97,11 @@ router.post(
       const token = jwt.sign({ userId: user.id }, config.jwtSecret, {
         expiresIn: config.jwtExpiresIn,
       });
+
+      // Activate any pending contacts pointing to this email and notify inviters
+      activatePendingContacts(user.id, email, user.full_name).catch((err) =>
+        console.error('Pending contact activation failed:', err)
+      );
 
       res.status(201).json({
         token,
