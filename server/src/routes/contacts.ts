@@ -74,6 +74,11 @@ router.post(
     try {
       const contactUserId = await lookupContactUserId(req.body.email, req.userId!);
 
+      if (!contactUserId) {
+        res.status(400).json({ error: 'No Sihaty account found with this email. Only registered users can be added as contacts.' });
+        return;
+      }
+
       // Get the next sort_order for this user (new contacts go to the bottom)
       const { data: maxRow } = await db()
         .from('contacts')

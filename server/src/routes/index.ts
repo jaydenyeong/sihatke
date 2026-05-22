@@ -6,6 +6,7 @@ import contactRoutes from './contacts';
 import alertRoutes from './alerts';
 import pushTokenRoutes from './pushTokens';
 import circleRoutes from './circle';
+import usersRoutes from './users';
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use('/contacts', contactRoutes);
 router.use('/alerts', alertRoutes);
 router.use('/push-tokens', pushTokenRoutes);
 router.use('/circle', circleRoutes);
+router.use('/users', usersRoutes);
 
 export default router;

@@ -31,6 +31,11 @@ const EMPTY_FORM = {
   notifyOnDecline: false,
 };
 
+interface FoundUser {
+  id: string;
+  fullName: string;
+}
+
 interface Props {
   editing: boolean;
 }
@@ -44,6 +49,8 @@ export function MyContactsList({ editing }: Props) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [foundUser, setFoundUser] = useState<FoundUser | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -68,6 +75,7 @@ export function MyContactsList({ editing }: Props) {
     setEditingContact(null);
     setForm(EMPTY_FORM);
     setFormError('');
+    setFoundUser(null);
     setModalVisible(true);
   };
 
@@ -84,7 +92,27 @@ export function MyContactsList({ editing }: Props) {
       notifyOnDecline: contact.notifyOnDecline,
     });
     setFormError('');
+    // When editing an existing linked contact, pre-populate foundUser
+    setFoundUser(contact.contactUserId ? { id: contact.contactUserId, fullName: contact.name } : null);
     setModalVisible(true);
+  };
+
+  const handleLookup = async () => {
+    const email = form.email.trim().toLowerCase();
+    if (!email) { setFormError('Enter an email address first'); return; }
+    setFormError('');
+    setFoundUser(null);
+    setLookingUp(true);
+    try {
+      const res = await apiRequest<FoundUser>(`/users/lookup?email=${encodeURIComponent(email)}`);
+      setFoundUser(res);
+      // Auto-fill name if empty
+      if (!form.name) updateField('name', res.fullName);
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.message : 'Could not look up user');
+    } finally {
+      setLookingUp(false);
+    }
   };
 
   const handleSave = async () => {
@@ -178,8 +206,11 @@ export function MyContactsList({ editing }: Props) {
           editing={editingContact}
           form={form}
           saving={saving}
+          lookingUp={lookingUp}
           formError={formError}
+          foundUser={foundUser}
           updateField={updateField}
+          onLookup={handleLookup}
           onSave={handleSave}
           onClose={() => setModalVisible(false)}
         />
@@ -268,8 +299,11 @@ export function MyContactsList({ editing }: Props) {
         editing={editingContact}
         form={form}
         saving={saving}
+        lookingUp={lookingUp}
         formError={formError}
+        foundUser={foundUser}
         updateField={updateField}
+        onLookup={handleLookup}
         onSave={handleSave}
         onClose={() => setModalVisible(false)}
       />
@@ -282,60 +316,112 @@ interface ModalProps {
   editing: Contact | null;
   form: typeof EMPTY_FORM;
   saving: boolean;
+  lookingUp: boolean;
   formError: string;
+  foundUser: FoundUser | null;
   updateField: (key: keyof typeof EMPTY_FORM, value: string | boolean) => void;
+  onLookup: () => void;
   onSave: () => void;
   onClose: () => void;
 }
 
-function ContactModal({ visible, editing, form, saving, formError, updateField, onSave, onClose }: ModalProps) {
+function ContactModal({ visible, editing, form, saving, lookingUp, formError, foundUser, updateField, onLookup, onSave, onClose }: ModalProps) {
+  const canSave = !!foundUser;
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView style={styles.modalContainer} contentContainerStyle={styles.modalScroll}>
+        <ScrollView style={styles.modalContainer} contentContainerStyle={styles.modalScroll} keyboardShouldPersistTaps="handled">
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{editing ? 'Edit Contact' : 'Add Contact'}</Text>
             <Pressable onPress={onClose} hitSlop={12}>
               <FontAwesome name="times" size={22} color={theme.textSecondary} />
             </Pressable>
           </View>
-          {formError ? <Text style={styles.formError}>{formError}</Text> : null}
 
-          <Text style={styles.label}>Name *</Text>
-          <TextInput style={styles.input} placeholder="Full name" placeholderTextColor={theme.textSecondary} value={form.name} onChangeText={(v) => updateField('name', v)} autoComplete="name" />
-
-          <Text style={styles.label}>Phone</Text>
-          <TextInput style={styles.input} placeholder="Phone number" placeholderTextColor={theme.textSecondary} value={form.phone} onChangeText={(v) => updateField('phone', v)} keyboardType="phone-pad" autoComplete="tel" />
-
-          <Text style={styles.label}>Email</Text>
-          <TextInput style={styles.input} placeholder="Email address" placeholderTextColor={theme.textSecondary} value={form.email} onChangeText={(v) => updateField('email', v)} keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
-
-          <Text style={styles.label}>Relationship</Text>
-          <TextInput style={styles.input} placeholder="e.g. Daughter, Neighbor, Doctor" placeholderTextColor={theme.textSecondary} value={form.relationship} onChangeText={(v) => updateField('relationship', v)} />
-
-          <View style={styles.switchSection}>
-            <Text style={styles.switchSectionTitle}>Notifications</Text>
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>Emergency contact</Text>
-              <Switch value={form.isEmergency} onValueChange={(v) => updateField('isEmergency', v)} trackColor={{ true: theme.danger }} />
-            </View>
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>Notify when I need help</Text>
-              <Switch value={form.notifyOnHelp} onValueChange={(v) => updateField('notifyOnHelp', v)} trackColor={{ true: theme.primary }} />
-            </View>
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>Notify on missed check-in</Text>
-              <Switch value={form.notifyOnMissed} onValueChange={(v) => updateField('notifyOnMissed', v)} trackColor={{ true: theme.primary }} />
-            </View>
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>Notify on declining trend</Text>
-              <Switch value={form.notifyOnDecline} onValueChange={(v) => updateField('notifyOnDecline', v)} trackColor={{ true: theme.primary }} />
-            </View>
+          {/* Email lookup — required first step */}
+          <Text style={styles.label}>Sihaty account email *</Text>
+          <View style={styles.emailRow}>
+            <TextInput
+              style={[styles.input, styles.emailInput]}
+              placeholder="their@email.com"
+              placeholderTextColor={theme.textSecondary}
+              value={form.email}
+              onChangeText={(v) => { updateField('email', v); }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+              editable={!editing}
+            />
+            {!editing && (
+              <Pressable
+                style={({ pressed }) => [styles.findBtn, (pressed || lookingUp) && { opacity: 0.8 }]}
+                onPress={onLookup}
+                disabled={lookingUp}>
+                <Text style={styles.findBtnText}>{lookingUp ? '…' : 'Find'}</Text>
+              </Pressable>
+            )}
           </View>
 
-          <Pressable disabled={saving} style={({ pressed }) => [styles.saveButton, (pressed || saving) && { opacity: 0.85 }]} onPress={onSave}>
-            <Text style={styles.saveButtonText}>{saving ? 'Saving…' : editing ? 'Update Contact' : 'Add Contact'}</Text>
-          </Pressable>
+          {foundUser && (
+            <View style={styles.foundBanner}>
+              <FontAwesome name="check-circle" size={16} color={theme.primary} />
+              <Text style={styles.foundText}>{foundUser.fullName} — Sihaty user found ✓</Text>
+            </View>
+          )}
+
+          {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+
+          {/* Rest of form — only shown once user is found or editing */}
+          {(foundUser || editing) && (
+            <>
+              <Text style={styles.label}>Name</Text>
+              <TextInput style={styles.input} placeholder="Display name" placeholderTextColor={theme.textSecondary} value={form.name} onChangeText={(v) => updateField('name', v)} autoComplete="name" />
+
+              <Text style={styles.label}>Phone</Text>
+              <TextInput style={styles.input} placeholder="Phone number (optional)" placeholderTextColor={theme.textSecondary} value={form.phone} onChangeText={(v) => updateField('phone', v)} keyboardType="phone-pad" autoComplete="tel" />
+
+              <Text style={styles.label}>Relationship</Text>
+              <TextInput style={styles.input} placeholder="e.g. Daughter, Neighbor, Doctor" placeholderTextColor={theme.textSecondary} value={form.relationship} onChangeText={(v) => updateField('relationship', v)} />
+
+              <View style={styles.switchSection}>
+                <Text style={styles.switchSectionTitle}>Notifications</Text>
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>Emergency contact</Text>
+                  <Switch value={form.isEmergency} onValueChange={(v) => updateField('isEmergency', v)} trackColor={{ true: theme.danger }} />
+                </View>
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>Notify when I need help</Text>
+                  <Switch value={form.notifyOnHelp} onValueChange={(v) => updateField('notifyOnHelp', v)} trackColor={{ true: theme.primary }} />
+                </View>
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>Notify on missed check-in</Text>
+                  <Switch value={form.notifyOnMissed} onValueChange={(v) => updateField('notifyOnMissed', v)} trackColor={{ true: theme.primary }} />
+                </View>
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>Notify on declining trend</Text>
+                  <Switch value={form.notifyOnDecline} onValueChange={(v) => updateField('notifyOnDecline', v)} trackColor={{ true: theme.primary }} />
+                </View>
+              </View>
+
+              <Pressable
+                disabled={saving || !canSave}
+                style={({ pressed }) => [styles.saveButton, (pressed || saving || !canSave) && { opacity: 0.6 }]}
+                onPress={onSave}>
+                <Text style={styles.saveButtonText}>{saving ? 'Saving…' : editing ? 'Update Contact' : 'Add Contact'}</Text>
+              </Pressable>
+            </>
+          )}
+
+          {!foundUser && !editing && (
+            <View style={styles.lookupHint}>
+              <FontAwesome name="info-circle" size={15} color={theme.textSecondary} />
+              <Text style={styles.lookupHintText}>
+                Only people with a Sihaty account can be added as contacts.
+                Ask them to sign up first, then enter their email here.
+              </Text>
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
@@ -371,6 +457,37 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: '600', color: theme.textPrimary, marginBottom: 8 },
   emptySubtext: { fontSize: 16, color: theme.textSecondary, textAlign: 'center', lineHeight: 22 },
+  emailRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  emailInput: { flex: 1 },
+  findBtn: {
+    backgroundColor: theme.primary,
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  findBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  foundBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.primaryLight,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  foundText: { fontSize: 14, fontWeight: '600', color: theme.primary, flex: 1 },
+  lookupHint: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 24,
+    paddingHorizontal: 4,
+    alignItems: 'flex-start',
+  },
+  lookupHintText: { fontSize: 14, color: theme.textSecondary, flex: 1, lineHeight: 20 },
   modalContainer: { flex: 1, backgroundColor: theme.background },
   modalScroll: { padding: 24, paddingBottom: 48 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
