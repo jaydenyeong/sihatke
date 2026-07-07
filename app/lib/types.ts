@@ -41,3 +41,20 @@ export interface Alert {
   status: AlertStatus;
   createdAt: string;
 }
+
+export type TreeStage = 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface SunshineReceived {
+  fromName: string;
+  createdAt: string;
+}
+
+export interface CheckinStats {
+  currentStreak: number;
+  weekDots: boolean[];
+  totalCheckins: number;
+  treeStage: TreeStage;
+  toNextStage: number | null;
+  fruitCount: number;
+  sunshines: SunshineReceived[];
+}
