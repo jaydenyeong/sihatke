@@ -84,7 +84,7 @@ router.post('/:userId/sunshine', auth, async (req: AuthRequest, res: Response) =
   try {
     const toUserId = req.params.userId as string;
 
-    const { data: link } = await db()
+    const { data: link, error: linkErr } = await db()
       .from('contacts')
       .select('id')
       .eq('user_id', toUserId)
@@ -93,12 +93,18 @@ router.post('/:userId/sunshine', auth, async (req: AuthRequest, res: Response) =
       .limit(1)
       .maybeSingle();
 
+    if (linkErr) {
+      console.error('Sunshine contact lookup error:', linkErr);
+      res.status(500).json({ error: 'Server error' });
+      return;
+    }
+
     if (!link) {
       res.status(404).json({ error: 'This person is not in your circle' });
       return;
     }
 
-    const { data: last } = await db()
+    const { data: last, error: lastErr } = await db()
       .from('sunshines')
       .select('created_at')
       .eq('from_user_id', req.userId!)
@@ -106,6 +112,12 @@ router.post('/:userId/sunshine', auth, async (req: AuthRequest, res: Response) =
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (lastErr) {
+      console.error('Sunshine cooldown lookup error:', lastErr);
+      res.status(500).json({ error: 'Server error' });
+      return;
+    }
 
     const lastSentAt = (last as Pick<SunshineRow, 'created_at'> | null)?.created_at ?? null;
     if (!canSendSunshine(lastSentAt)) {

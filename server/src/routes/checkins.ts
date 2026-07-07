@@ -241,21 +241,28 @@ router.get('/stats', auth, async (req: AuthRequest, res: Response) => {
     const tree = treeStateFor(total ?? 0);
 
     const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-    const { data: sunRows } = await db()
+    const { data: sunRows, error: sunErr } = await db()
       .from('sunshines')
       .select('from_user_id, created_at')
       .eq('to_user_id', req.userId!)
       .gte('created_at', since)
       .order('created_at', { ascending: false });
 
+    if (sunErr) {
+      console.error('Stats sunshines error:', sunErr);
+    }
+
     let sunshines: { fromName: string; createdAt: string }[] = [];
     const rows = (sunRows ?? []) as Pick<SunshineRow, 'from_user_id' | 'created_at'>[];
     if (rows.length > 0) {
       const senderIds = [...new Set(rows.map((r) => r.from_user_id))];
-      const { data: senders } = await db()
+      const { data: senders, error: sendersErr } = await db()
         .from('users')
         .select('id, full_name')
         .in('id', senderIds);
+      if (sendersErr) {
+        console.error('Stats senders error:', sendersErr);
+      }
       const nameById = new Map(
         ((senders ?? []) as Pick<UserRow, 'id' | 'full_name'>[]).map((u) => [u.id, u.full_name])
       );
