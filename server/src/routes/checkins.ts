@@ -7,6 +7,7 @@ import { auth, AuthRequest } from '../middleware/auth';
 import { triggerNeedHelpAlert } from '../services/alertService';
 import { sendPushToUsers } from '../services/notificationService';
 import { treeStateFor } from '../services/treeService';
+import { computeStreak, localDateString, streakFromDates } from '../services/statsService';
 
 const router = Router();
 
@@ -16,51 +17,6 @@ const MILESTONE_MESSAGES: Record<number, string> = {
   30:  'A whole month! Your family is so grateful. 🎉',
   100: '100 days strong — you\'re an inspiration! 💪',
 };
-
-function localDateString(tz: string, date: Date): string {
-  try {
-    return new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(date);
-  } catch {
-    return date.toISOString().slice(0, 10);
-  }
-}
-
-async function computeStreak(userId: string, tz: string): Promise<number> {
-  const windowStart = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString();
-  const { data } = await db()
-    .from('checkins')
-    .select('created_at')
-    .eq('user_id', userId)
-    .gte('created_at', windowStart);
-
-  const checkinDates = new Set<string>();
-  for (const c of (data ?? []) as { created_at: string }[]) {
-    checkinDates.add(localDateString(tz, new Date(c.created_at)));
-  }
-
-  const todayLocal = localDateString(tz, new Date());
-  const yesterdayLocal = localDateString(tz, new Date(Date.now() - 86400000));
-
-  // If neither today nor yesterday has a check-in, streak is 0
-  const startOffset = checkinDates.has(todayLocal) ? 0
-    : checkinDates.has(yesterdayLocal) ? 1
-    : -1;
-
-  if (startOffset < 0) return 0;
-
-  let streak = 0;
-  for (let i = startOffset; i < 35; i++) {
-    const day = localDateString(tz, new Date(Date.now() - i * 86400000));
-    if (checkinDates.has(day)) streak++;
-    else break;
-  }
-  return streak;
-}
 
 // POST /api/checkins
 router.post(
@@ -223,20 +179,7 @@ router.get('/stats', auth, async (req: AuthRequest, res: Response) => {
     });
 
     // Streak
-    const todayLocal = localDateString(tz, new Date());
-    const yesterdayLocal = localDateString(tz, new Date(Date.now() - 86400000));
-    const startOffset = checkinDates.has(todayLocal) ? 0
-      : checkinDates.has(yesterdayLocal) ? 1
-      : -1;
-
-    let currentStreak = 0;
-    if (startOffset >= 0) {
-      for (let i = startOffset; i < 35; i++) {
-        const day = localDateString(tz, new Date(Date.now() - i * 86400000));
-        if (checkinDates.has(day)) currentStreak++;
-        else break;
-      }
-    }
+    const currentStreak = streakFromDates(checkinDates, tz);
 
     const tree = treeStateFor(total ?? 0);
 

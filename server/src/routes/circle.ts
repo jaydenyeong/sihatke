@@ -2,7 +2,8 @@ import { Router, Response } from 'express';
 import { db } from '../db/supabase';
 import { mapCheckin } from '../db/mappers';
 import type { CheckinRow, SunshineRow, UserRow } from '../db/types';
-import { canSendSunshine, nextAllowedAt } from '../services/treeService';
+import { canSendSunshine, nextAllowedAt, treeStateFor } from '../services/treeService';
+import { computeStreak } from '../services/statsService';
 import { sendPushToUsers } from '../services/notificationService';
 import { auth, AuthRequest } from '../middleware/auth';
 
@@ -40,7 +41,7 @@ router.get('/', auth, async (req: AuthRequest, res: Response) => {
     // 2. Fetch sender profiles
     const { data: users, error: usersErr } = await db()
       .from('users')
-      .select('id, full_name')
+      .select('id, full_name, timezone')
       .in('id', senderIds);
 
     if (usersErr || !users) {
@@ -49,21 +50,30 @@ router.get('/', auth, async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    // 3. Fetch latest check-in for each sender
+    // 3. Fetch latest check-in, total count, and streak for each sender
     const results = await Promise.all(
-      (users as Pick<UserRow, 'id' | 'full_name'>[]).map(async (user) => {
-        const { data: checkin } = await db()
-          .from('checkins')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      (users as Pick<UserRow, 'id' | 'full_name' | 'timezone'>[]).map(async (user) => {
+        const [{ data: checkin }, { count }, currentStreak] = await Promise.all([
+          db()
+            .from('checkins')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          db()
+            .from('checkins')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', user.id),
+          computeStreak(user.id, user.timezone || 'UTC'),
+        ]);
 
         return {
           _id: user.id,
           fullName: user.full_name,
           latestCheckin: checkin ? mapCheckin(checkin as CheckinRow) : null,
+          treeStage: treeStateFor(count ?? 0).stage,
+          currentStreak,
         };
       })
     );
