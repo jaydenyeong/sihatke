@@ -130,6 +130,8 @@ export function TreeScene({
       style={{ height: HERO_HEIGHT, width: '100%' }}
       accessible
       accessibilityLabel={accessibilityLabel}
+      accessibilityRole={onTreePress ? 'button' : undefined}
+      onAccessibilityTap={onTreePress}
     >
       {/* Static layer: celestial + ground */}
       <Svg style={StyleSheet.absoluteFill} viewBox="0 0 320 210" preserveAspectRatio="xMidYMax meet">
@@ -157,8 +159,6 @@ export function TreeScene({
           style={StyleSheet.absoluteFill}
           onPress={onTreePress}
           disabled={!onTreePress}
-          accessibilityRole={onTreePress ? 'button' : undefined}
-          accessibilityLabel={onTreePress ? 'Show tree progress' : undefined}
         >
           <Svg style={StyleSheet.absoluteFill} viewBox="0 0 320 210" preserveAspectRatio="xMidYMax meet">
             <G transform="translate(60, 32)">
