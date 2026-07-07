@@ -64,3 +64,10 @@ export interface PushTokenRow {
   created_at: string;
   updated_at: string;
 }
+
+export interface SunshineRow {
+  id: string;
+  from_user_id: string;
+  to_user_id: string;
+  created_at: string;
+}

@@ -5,6 +5,7 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Drop existing objects (safe to re-run during dev)
+DROP TABLE IF EXISTS sunshines   CASCADE;
 DROP TABLE IF EXISTS push_tokens CASCADE;
 DROP TABLE IF EXISTS alerts      CASCADE;
 DROP TABLE IF EXISTS contacts    CASCADE;
@@ -90,6 +91,16 @@ CREATE TABLE push_tokens (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Sunshine reactions (family → sender)
+CREATE TABLE sunshines (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  from_user_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_sunshines_to      ON sunshines (to_user_id, created_at DESC);
+CREATE INDEX idx_sunshines_from_to ON sunshines (from_user_id, to_user_id, created_at DESC);
 
 -- updated_at auto-touch trigger
 CREATE OR REPLACE FUNCTION touch_updated_at() RETURNS TRIGGER AS $$

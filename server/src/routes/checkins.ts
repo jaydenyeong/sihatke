@@ -2,10 +2,11 @@ import { Router, Response } from 'express';
 import { body } from 'express-validator';
 import { db } from '../db/supabase';
 import { mapCheckin } from '../db/mappers';
-import type { CheckinRow, UserRow } from '../db/types';
+import type { CheckinRow, UserRow, SunshineRow } from '../db/types';
 import { auth, AuthRequest } from '../middleware/auth';
 import { triggerNeedHelpAlert } from '../services/alertService';
 import { sendPushToUsers } from '../services/notificationService';
+import { treeStateFor } from '../services/treeService';
 
 const router = Router();
 
@@ -237,7 +238,42 @@ router.get('/stats', auth, async (req: AuthRequest, res: Response) => {
       }
     }
 
-    res.json({ currentStreak, weekDots, totalCheckins: total ?? 0 });
+    const tree = treeStateFor(total ?? 0);
+
+    const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const { data: sunRows } = await db()
+      .from('sunshines')
+      .select('from_user_id, created_at')
+      .eq('to_user_id', req.userId!)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false });
+
+    let sunshines: { fromName: string; createdAt: string }[] = [];
+    const rows = (sunRows ?? []) as Pick<SunshineRow, 'from_user_id' | 'created_at'>[];
+    if (rows.length > 0) {
+      const senderIds = [...new Set(rows.map((r) => r.from_user_id))];
+      const { data: senders } = await db()
+        .from('users')
+        .select('id, full_name')
+        .in('id', senderIds);
+      const nameById = new Map(
+        ((senders ?? []) as Pick<UserRow, 'id' | 'full_name'>[]).map((u) => [u.id, u.full_name])
+      );
+      sunshines = rows.map((r) => ({
+        fromName: nameById.get(r.from_user_id) ?? 'Someone',
+        createdAt: r.created_at,
+      }));
+    }
+
+    res.json({
+      currentStreak,
+      weekDots,
+      totalCheckins: total ?? 0,
+      treeStage: tree.stage,
+      toNextStage: tree.toNextStage,
+      fruitCount: tree.fruitCount,
+      sunshines,
+    });
   } catch (err) {
     console.error('Stats error:', err);
     res.status(500).json({ error: 'Server error' });
