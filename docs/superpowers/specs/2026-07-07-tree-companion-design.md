@@ -83,7 +83,7 @@ No schema change for growth — stage derives from a `count(*)` of the user's ch
 
 - `GET /checkins/stats` (existing) — add `totalCheckins`, `treeStage` (1–6), `toNextStage` (check-ins remaining, null at stage 6), and `sunshines` (last 48h: `[{ fromName, createdAt }]`).
 - Circle/contacts list endpoint (existing) — add `treeStage` and `currentStreak` per monitored person.
-- `POST /contacts/:userId/sunshine` (new) — validates active contact relationship; rejects (409) if a sunshine from this sender to this recipient exists within the past 20 hours; inserts row; sends push. Response includes when the sender can send again.
+- `POST /circle/:userId/sunshine` (new) — validates that `:userId` has the caller as an active contact (the circle relationship); rejects (409) if a sunshine from this sender to this recipient exists within the past 20 hours; inserts row; sends push. The 409 response includes `nextAllowedAt`.
 
 ## Client Components
 
@@ -101,7 +101,7 @@ No schema change for growth — stage derives from a `count(*)` of the user's ch
 ## Testing
 
 - **Server:** unit tests for stage thresholds at boundary values (0, 4, 5, 24, 25, …, 200); sunshine rate-limit (within/outside 20h); relationship validation on send.
-- **Client:** render test of `Tree` per stage; manual visual pass of day/night by adjusting device clock.
+- **Client:** manual visual checklist rendering all 6 stages in both palettes (the app has no test framework, and adding one for a snapshot test would be overengineering); manual visual pass of day/night by adjusting device clock.
 
 ## Out of Scope (Backlog)
 
