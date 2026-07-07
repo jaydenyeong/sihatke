@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { LayoutAnimation, Platform, UIManager, StyleSheet, Text, View, Pressable, ScrollView } from 'react-native';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -8,10 +8,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '@/constants/Colors';
 import { apiRequest } from '@/lib/api';
 import { STATUS_META } from '@/lib/status';
-import type { Checkin } from '@/lib/types';
+import { getUserId } from '@/lib/auth';
+import { STAGE_META } from '@/lib/tree';
+import { TreeScene } from '@/components/tree/TreeScene';
+import { paletteForDate } from '@/components/tree/palette';
+import type { Checkin, CheckinStats } from '@/lib/types';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -50,10 +55,14 @@ export default function HomeScreen() {
 
   const [userName, setUserName] = useState('');
   const [latest, setLatest] = useState<Checkin | null>(null);
-  const [streak, setStreak] = useState(0);
-  const [weekDots, setWeekDots] = useState<boolean[]>([]);
   const [checkinTimes, setCheckinTimes] = useState<string[]>([]);
   const [heroExpanded, setHeroExpanded] = useState(true);
+  const [stats, setStats] = useState<CheckinStats | null>(null);
+  const [celebrate, setCelebrate] = useState(false);
+  const [showProgress, setShowProgress] = useState(false);
+  const [sunshineBanner, setSunshineBanner] = useState<string | null>(null);
+
+  const hydratedRef = useRef(false);
 
   const toggleHero = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -65,17 +74,51 @@ export default function HomeScreen() {
       let cancelled = false;
       (async () => {
         try {
-          const [me, last, stats] = await Promise.all([
+          const uid = await getUserId();
+
+          // Hydrate from cache once so the tree never flashes back to seed
+          if (uid && !hydratedRef.current) {
+            hydratedRef.current = true;
+            const cached = await AsyncStorage.getItem(`tree_cache_${uid}`);
+            if (cached && !cancelled) {
+              try { setStats(JSON.parse(cached) as CheckinStats); } catch {}
+            }
+          }
+
+          const [me, last, freshStats] = await Promise.all([
             apiRequest<Me>('/auth/me'),
             apiRequest<Checkin | null>('/checkins/latest'),
-            apiRequest<{ currentStreak: number; weekDots: boolean[] }>('/checkins/stats'),
+            apiRequest<CheckinStats>('/checkins/stats'),
           ]);
           if (cancelled) return;
           setUserName(me.fullName || '');
           setCheckinTimes(me.checkinTimes ?? []);
           setLatest(last);
-          setStreak(stats.currentStreak);
-          setWeekDots(stats.weekDots);
+          setStats(freshStats);
+
+          if (uid) {
+            await AsyncStorage.setItem(`tree_cache_${uid}`, JSON.stringify(freshStats));
+
+            // Growth celebration: stage increased since last seen
+            const storedStage = await AsyncStorage.getItem(`tree_stage_${uid}`);
+            if (storedStage && freshStats.treeStage > parseInt(storedStage, 10)) {
+              setCelebrate(true);
+            }
+            await AsyncStorage.setItem(`tree_stage_${uid}`, String(freshStats.treeStage));
+
+            // Sunshine banner: anything newer than last seen
+            const seen = (await AsyncStorage.getItem(`sunshine_seen_${uid}`)) ?? '';
+            const fresh = freshStats.sunshines.find((s) => s.createdAt > seen);
+            if (fresh) {
+              setSunshineBanner(fresh.fromName.split(' ')[0]);
+              await AsyncStorage.setItem(
+                `sunshine_seen_${uid}`,
+                freshStats.sunshines[0].createdAt
+              );
+            } else {
+              setSunshineBanner(null);
+            }
+          }
         } catch {
           // Silent — auth guard handles 401s; other errors leave stale state.
         }
@@ -92,48 +135,102 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Green hero header — tap chevron to collapse */}
-        <Pressable style={styles.hero} onPress={toggleHero} accessibilityRole="button" accessibilityLabel={heroExpanded ? 'Collapse header' : 'Expand header'}>
-          {heroExpanded ? (
-            <>
-              <View style={styles.heroTop}>
-                <View>
-                  <Text style={styles.dateText}>{dateString}</Text>
-                  <Text style={styles.greeting}>{greeting},</Text>
-                  <Text style={styles.name}>{userName || 'Friend'} 👋</Text>
-                </View>
-                <View style={styles.avatarCircle}>
-                  <FontAwesome name="user" size={28} color={theme.primary} />
-                </View>
-              </View>
-              {weekDots.length === 7 && (
-                <View style={styles.consistencyRow}>
-                  <View style={styles.dotsRow}>
-                    {weekDots.map((filled, i) => (
-                      <View key={i} style={[styles.dot, filled ? styles.dotFilled : styles.dotEmpty]} />
-                    ))}
+        {(() => {
+          const pal = paletteForDate();
+          const streak = stats?.currentStreak ?? 0;
+          const weekDots = stats?.weekDots ?? [];
+          return (
+            <View style={[styles.hero, heroExpanded && { backgroundColor: pal.sky }]}>
+              {heroExpanded ? (
+                <>
+                  <View style={styles.heroTop}>
+                    <View>
+                      <Text style={[styles.dateText, { color: pal.textSoft }]}>{dateString}</Text>
+                      <Text style={[styles.greeting, { color: pal.text }]}>{greeting},</Text>
+                      <Text style={[styles.name, { color: pal.text }]}>{userName || 'Friend'} 👋</Text>
+                    </View>
+                    <View style={styles.avatarCircle}>
+                      <FontAwesome name="user" size={28} color={theme.primary} />
+                    </View>
                   </View>
-                  {streak > 0 && (
-                    <Text style={styles.streakText}>🔥 {streak} day{streak !== 1 ? 's' : ''}</Text>
+
+                  {sunshineBanner && (
+                    <View style={styles.sunshineBanner}>
+                      <Text style={styles.sunshineBannerText}>
+                        ☀️ {sunshineBanner} sent you sunshine
+                      </Text>
+                    </View>
                   )}
+
+                  <TreeScene
+                    stage={stats?.treeStage ?? 1}
+                    fruitCount={stats?.fruitCount ?? 0}
+                    streak={streak}
+                    sunshines={stats?.sunshines ?? []}
+                    size="hero"
+                    celebrate={celebrate}
+                    onTreePress={() => setShowProgress((v) => !v)}
+                    accessibilityLabel={`Your tree: ${STAGE_META[stats?.treeStage ?? 1].name}, ${stats?.totalCheckins ?? 0} check-ins, ${streak}-day streak`}
+                  />
+
+                  {stats?.totalCheckins === 0 ? (
+                    <Text style={[styles.treeHint, { color: pal.textSoft }]}>
+                      Your tree is waiting for its first check-in 🌱
+                    </Text>
+                  ) : showProgress && stats ? (
+                    <Text style={[styles.treeHint, { color: pal.textSoft }]}>
+                      {STAGE_META[stats.treeStage].emoji} {STAGE_META[stats.treeStage].name} · {stats.totalCheckins} check-ins
+                      {stats.toNextStage !== null
+                        ? ` · ${stats.toNextStage} more to ${STAGE_META[(stats.treeStage + 1) as CheckinStats['treeStage']].name}`
+                        : ''}
+                    </Text>
+                  ) : null}
+
+                  {weekDots.length === 7 && (
+                    <View style={styles.consistencyRow}>
+                      <View style={styles.dotsRow}>
+                        {weekDots.map((filled, i) => (
+                          <View
+                            key={i}
+                            style={[
+                              styles.dot,
+                              filled
+                                ? { backgroundColor: pal.night ? '#FFFFFF' : theme.primary }
+                                : { borderWidth: 1.5, borderColor: pal.textSoft },
+                            ]}
+                          />
+                        ))}
+                      </View>
+                      {streak > 0 && (
+                        <Text style={[styles.streakText, { color: pal.text }]}>
+                          🔥 {streak} day{streak !== 1 ? 's' : ''}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                </>
+              ) : (
+                <View style={styles.heroCompact}>
+                  <Text style={styles.heroCompactName}>{greeting}, {userName || 'Friend'} 👋</Text>
+                  {streak > 0 && <Text style={styles.streakText}>🔥 {streak}</Text>}
                 </View>
               )}
-            </>
-          ) : (
-            <View style={styles.heroCompact}>
-              <Text style={styles.heroCompactName}>{greeting}, {userName || 'Friend'} 👋</Text>
-              {streak > 0 && (
-                <Text style={styles.streakText}>🔥 {streak}</Text>
-              )}
+              <Pressable
+                style={styles.heroChevron}
+                onPress={toggleHero}
+                hitSlop={16}
+                accessibilityRole="button"
+                accessibilityLabel={heroExpanded ? 'Collapse header' : 'Expand header'}
+              >
+                <FontAwesome
+                  name={heroExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={11}
+                  color={heroExpanded ? paletteForDate().textSoft : 'rgba(255,255,255,0.6)'}
+                />
+              </Pressable>
             </View>
-          )}
-          <View style={styles.heroChevron}>
-            <FontAwesome
-              name={heroExpanded ? 'chevron-up' : 'chevron-down'}
-              size={11}
-              color="rgba(255,255,255,0.6)"
-            />
-          </View>
-        </Pressable>
+          );
+        })()}
 
         <View style={styles.body}>
           {checkinTimes.length > 0 && (
@@ -237,14 +334,16 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
-  dotFilled: {
-    backgroundColor: '#FFFFFF',
+  sunshineBanner: {
+    alignSelf: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginTop: 8,
   },
-  dotEmpty: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.6)',
-  },
+  sunshineBannerText: { fontSize: 13, fontWeight: '700', color: '#B45309' },
+  treeHint: { fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: 6 },
   streakText: {
     fontSize: 14,
     fontWeight: '700',
