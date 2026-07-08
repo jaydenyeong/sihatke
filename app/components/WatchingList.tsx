@@ -82,15 +82,15 @@ export function WatchingList({ editing }: Props) {
   const [sunshineSent, setSunshineSent] = useState<Set<string>>(new Set());
 
   const sendSunshine = useCallback(async (member: CircleMember) => {
+    setSunshineSent((prev) => new Set(prev).add(member._id));
     try {
       await apiRequest(`/circle/${member._id}/sunshine`, { method: 'POST' });
-      setSunshineSent((prev) => new Set(prev).add(member._id));
       Alert.alert('Sunshine sent ☀️', `${member.fullName.split(' ')[0]} will see it on their tree.`);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setSunshineSent((prev) => new Set(prev).add(member._id));
         Alert.alert('Already sent ☀️', 'You can send sunshine once a day per person.');
       } else {
+        setSunshineSent((prev) => { const next = new Set(prev); next.delete(member._id); return next; });
         Alert.alert('Could not send', 'Please check your connection and try again.');
       }
     }
