@@ -159,6 +159,14 @@ CREATE TABLE push_tokens (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Sunshine reactions
+CREATE TABLE sunshines (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  from_user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 ```
 
 ### Data Access Control
@@ -193,6 +201,7 @@ All endpoints prefixed with `/api`. Auth required unless noted.
 | POST | `/api/checkins` | Create a check-in (triggers `triggerNeedHelpAlert` if `need_help`) |
 | GET | `/api/checkins` | Get check-in history (paginated) |
 | GET | `/api/checkins/latest` | Get most recent check-in |
+| GET | `/api/checkins/stats` | Get check-in stats and tree data (`totalCheckins`, `treeStage` 1–6, `toNextStage`, `fruitCount`, `sunshines` last 48h; thresholds: 0/5/25/60/120/200 check-ins) |
 
 ### Contacts
 | Method | Endpoint | Purpose |
@@ -213,6 +222,12 @@ All endpoints prefixed with `/api`. Auth required unless noted.
 |--------|----------|---------|
 | POST | `/api/push-tokens` | Register/upsert device push token |
 | DELETE | `/api/push-tokens/:token` | Remove token on logout |
+
+### Circle
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/circle` | List circle members with `treeStage` and `currentStreak` |
+| POST | `/api/circle/:userId/sunshine` | Send sunshine reaction; 404 if not active circle link, 409 if in 20h cooldown (returns `nextAllowedAt`); pushes "{First name} sent you sunshine ☀️" to recipient |
 
 ### Background Jobs (node-cron, in-process on Express)
 
