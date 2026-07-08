@@ -30,8 +30,14 @@ async function start() {
     process.exit(1);
   }
 
-  app.listen(config.port, () => {
-    console.log(`Server running on http://localhost:${config.port}`);
+  const port = Number(config.port);
+  if (Number.isNaN(port)) {
+    console.error(`Invalid port: ${config.port}`);
+    process.exit(1);
+  }
+
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${port}`);
     startSchedulers();
   });
 }
