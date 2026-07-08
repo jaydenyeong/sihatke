@@ -95,6 +95,7 @@ export default function HomeScreen() {
           setCheckinTimes(me.checkinTimes ?? []);
           setLatest(last);
           setStats(freshStats);
+          setCelebrate(false);
 
           if (uid) {
             await AsyncStorage.setItem(`tree_cache_${uid}`, JSON.stringify(freshStats));
