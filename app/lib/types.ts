@@ -28,6 +28,8 @@ export interface CircleMember {
   _id: string;
   fullName: string;
   latestCheckin: Checkin | null;
+  treeStage: TreeStage;
+  currentStreak: number;
 }
 
 export type AlertType = 'need_help' | 'missed_checkin' | 'decline_pattern';

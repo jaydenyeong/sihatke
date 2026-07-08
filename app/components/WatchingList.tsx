@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -11,10 +12,12 @@ import {
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '@/constants/Colors';
-import { apiRequest } from '@/lib/api';
+import { ApiError, apiRequest } from '@/lib/api';
 import { getUserId } from '@/lib/auth';
 import { STATUS_META } from '@/lib/status';
+import { STAGE_META } from '@/lib/tree';
 import type { CircleMember } from '@/lib/types';
+import { TreeScene } from '@/components/tree/TreeScene';
 
 const orderKey = (userId: string) => `watching_order_${userId}`;
 const STATUS_PRIORITY = ['need_help', 'not_great', 'okay', 'great'];
@@ -76,6 +79,22 @@ export function WatchingList({ editing }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const userIdRef = useRef<string | null>(null);
+  const [sunshineSent, setSunshineSent] = useState<Set<string>>(new Set());
+
+  const sendSunshine = useCallback(async (member: CircleMember) => {
+    try {
+      await apiRequest(`/circle/${member._id}/sunshine`, { method: 'POST' });
+      setSunshineSent((prev) => new Set(prev).add(member._id));
+      Alert.alert('Sunshine sent ☀️', `${member.fullName.split(' ')[0]} will see it on their tree.`);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setSunshineSent((prev) => new Set(prev).add(member._id));
+        Alert.alert('Already sent ☀️', 'You can send sunshine once a day per person.');
+      } else {
+        Alert.alert('Could not send', 'Please check your connection and try again.');
+      }
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -140,18 +159,16 @@ export function WatchingList({ editing }: Props) {
             ) as typeof todayCheckin.physicalStatus)
           : null;
 
-        const initials = item.fullName
-          .split(' ')
-          .map((w) => w[0])
-          .join('')
-          .toUpperCase()
-          .slice(0, 2);
-
         return (
           <View style={styles.card}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
+            <TreeScene
+              stage={item.treeStage}
+              fruitCount={0}
+              streak={item.currentStreak}
+              sunshines={[]}
+              size="mini"
+              accessibilityLabel={`${item.fullName}'s tree: ${STAGE_META[item.treeStage].name}`}
+            />
             <View style={styles.cardBody}>
               <Text style={styles.memberName}>{item.fullName}</Text>
               {todayCheckin && worst ? (
@@ -171,6 +188,10 @@ export function WatchingList({ editing }: Props) {
               ) : (
                 <Text style={styles.noCheckin}>No check-in today</Text>
               )}
+              <Text style={styles.stageLine}>
+                {STAGE_META[item.treeStage].emoji} {STAGE_META[item.treeStage].name}
+                {item.currentStreak > 0 ? ` · ${item.currentStreak}-day streak` : ''}
+              </Text>
             </View>
             {editing ? (
               <View style={styles.arrowBtns}>
@@ -198,14 +219,24 @@ export function WatchingList({ editing }: Props) {
                 </Pressable>
               </View>
             ) : (
-              <View
-                style={[
-                  styles.trafficLight,
-                  { backgroundColor: worst ? STATUS_META[worst].bgColor : '#E5E7EB' },
-                ]}>
-                <Text style={styles.trafficLightEmoji}>
-                  {worst ? STATUS_META[worst].emoji : '💤'}
-                </Text>
+              <View style={styles.rightCol}>
+                <View
+                  style={[
+                    styles.trafficLight,
+                    { backgroundColor: worst ? STATUS_META[worst].bgColor : '#E5E7EB' },
+                  ]}>
+                  <Text style={styles.trafficLightEmoji}>
+                    {worst ? STATUS_META[worst].emoji : '💤'}
+                  </Text>
+                </View>
+                <Pressable
+                  style={[styles.sunshineBtn, sunshineSent.has(item._id) && styles.sunshineBtnSent]}
+                  disabled={sunshineSent.has(item._id)}
+                  onPress={() => sendSunshine(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Send sunshine to ${item.fullName}`}>
+                  <Text style={styles.sunshineBtnEmoji}>☀️</Text>
+                </Pressable>
               </View>
             )}
           </View>
@@ -226,15 +257,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
   },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: theme.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { fontSize: 18, fontWeight: '700', color: theme.primary },
   cardBody: { flex: 1, gap: 6 },
   memberName: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
   statusRow: { flexDirection: 'row', gap: 6 },
@@ -258,6 +280,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   trafficLightEmoji: { fontSize: 22 },
+  rightCol: { gap: 8, alignItems: 'center' },
+  stageLine: { fontSize: 13, fontWeight: '600', color: theme.primary },
+  sunshineBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFF3D6',
+    borderWidth: 2,
+    borderColor: '#FFD166',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sunshineBtnSent: { opacity: 0.4 },
+  sunshineBtnEmoji: { fontSize: 20 },
   arrowBtns: { gap: 4 },
   arrowBtn: {
     width: 44,
