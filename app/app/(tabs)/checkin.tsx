@@ -11,10 +11,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Reanimated, {
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { theme } from '@/constants/Colors';
 import { apiRequest, ApiError } from '@/lib/api';
 import { STATUS_META, STATUS_ORDER } from '@/lib/status';
 import type { Checkin, StatusLevel } from '@/lib/types';
+import { Petal } from '@/components/tree/Petal';
 
 type Step = 'physical' | 'mental' | 'note' | 'done';
 
@@ -55,6 +62,22 @@ function useSlideIn(step: Step) {
   }, [step]);
 
   return { translateX, opacity };
+}
+
+function SuccessTick() {
+  const scale = useSharedValue(0);
+  useEffect(() => {
+    scale.value = withSpring(1, { damping: 8, reduceMotion: ReduceMotion.System });
+  }, [scale]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return (
+    <Reanimated.View
+      style={[styles.doneTick, style]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants">
+      <FontAwesome name="check" size={40} color="#FFFFFF" />
+    </Reanimated.View>
+  );
 }
 
 export default function CheckInScreen() {
@@ -116,11 +139,15 @@ export default function CheckInScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.doneCard}>
-          <Text style={styles.doneEmoji}>✅</Text>
+          {Array.from({ length: 8 }, (_, i) => (
+            <Petal key={i} index={i} left={20 + i * 42} top={40 + (i % 4) * 16} />
+          ))}
+          <SuccessTick />
           <Text style={styles.doneTitle}>Check-in Complete!</Text>
           <Text style={styles.doneSubtext}>
             Your contacts have been updated with your status.
           </Text>
+          <Text style={styles.doneTreeLine}>Your tree just got a little water 🌱</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back to home"
@@ -455,10 +482,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 32,
   },
-  doneEmoji: {
-    fontSize: 64,
-    marginBottom: 20,
-  },
   doneTitle: {
     fontSize: 28,
     fontWeight: '700',
@@ -469,7 +492,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.textSecondary,
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 10,
     lineHeight: 22,
+  },
+  doneTick: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: theme.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  doneTreeLine: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.primary,
+    marginBottom: 32,
   },
 });
