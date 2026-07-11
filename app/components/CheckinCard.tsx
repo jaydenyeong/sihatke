@@ -196,6 +196,7 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     marginTop: 16,
+    minHeight: 56,
   },
   againButtonText: {
     color: theme.primary,

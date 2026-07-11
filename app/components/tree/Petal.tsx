@@ -25,7 +25,8 @@ export function Petal({ index, left, top }: PetalProps) {
         duration: 1600,
         easing: Easing.out(Easing.quad),
         reduceMotion: ReduceMotion.System,
-      })
+      }),
+      ReduceMotion.System
     );
   }, [fall, index]);
   const style = useAnimatedStyle(() => ({
