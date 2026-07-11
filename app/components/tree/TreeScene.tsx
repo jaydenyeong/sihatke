@@ -14,6 +14,7 @@ import Svg, { Circle, Ellipse, G, Path } from 'react-native-svg';
 import type { SunshineReceived, TreeStage } from '@/lib/types';
 import { TreeFigure } from './Tree';
 import { DAY_PALETTE, paletteForDate } from './palette';
+import { Petal } from './Petal';
 
 interface TreeSceneProps {
   stage: TreeStage;
@@ -44,28 +45,6 @@ function SunshineSun({ name, index }: { name: string; index: number }) {
       <Text style={styles.sunEmoji}>☀️</Text>
       <Text style={styles.sunName}>{name}</Text>
     </Animated.View>
-  );
-}
-
-function Petal({ index }: { index: number }) {
-  const fall = useSharedValue(0);
-  useEffect(() => {
-    fall.value = withDelay(
-      index * 120,
-      withTiming(1, { duration: 1600, easing: Easing.out(Easing.quad) })
-    );
-  }, [fall, index]);
-  const style = useAnimatedStyle(() => ({
-    opacity: 1 - fall.value,
-    transform: [
-      { translateY: fall.value * 130 },
-      { translateX: Math.sin(index) * 24 * fall.value },
-    ],
-  }));
-  return (
-    <Animated.View
-      style={[styles.petal, { left: 60 + index * 36, top: 20 + (index % 3) * 10 }, style]}
-    />
   );
 }
 
@@ -190,7 +169,9 @@ export function TreeScene({
 
       {/* One-shot petal celebration */}
       {celebrate &&
-        Array.from({ length: PETAL_COUNT }, (_, i) => <Petal key={i} index={i} />)}
+        Array.from({ length: PETAL_COUNT }, (_, i) => (
+          <Petal key={i} index={i} left={60 + i * 36} top={20 + (i % 3) * 10} />
+        ))}
     </View>
   );
 }
@@ -210,11 +191,4 @@ const styles = StyleSheet.create({
   },
   sunEmoji: { fontSize: 18 },
   sunName: { fontSize: 10, fontWeight: '700', color: '#B45309' },
-  petal: {
-    position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FFB7C5',
-  },
 });
