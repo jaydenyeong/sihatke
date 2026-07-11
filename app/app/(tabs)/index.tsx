@@ -11,11 +11,11 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '@/constants/Colors';
 import { apiRequest } from '@/lib/api';
-import { STATUS_META } from '@/lib/status';
 import { getUserId } from '@/lib/auth';
 import { STAGE_META } from '@/lib/tree';
 import { TreeScene } from '@/components/tree/TreeScene';
 import { paletteForDate } from '@/components/tree/palette';
+import { CheckinCard } from '@/components/CheckinCard';
 import type { Checkin, CheckinStats } from '@/lib/types';
 
 function getGreeting(): string {
@@ -241,51 +241,11 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {todaysCheckin ? (
-            <View style={styles.statusCard}>
-              <Text style={styles.cardLabel}>Today's last check-in</Text>
-              <View style={styles.statusRow}>
-                <View style={[styles.statusBadge, { backgroundColor: STATUS_META[todaysCheckin.physicalStatus].bgColor }]}>
-                  <Text style={styles.statusBadgeEmoji}>{STATUS_META[todaysCheckin.physicalStatus].emoji}</Text>
-                  <Text style={[styles.statusBadgeText, { color: STATUS_META[todaysCheckin.physicalStatus].color }]}>
-                    {STATUS_META[todaysCheckin.physicalStatus].short}
-                  </Text>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: STATUS_META[todaysCheckin.mentalStatus].bgColor }]}>
-                  <Text style={styles.statusBadgeEmoji}>{STATUS_META[todaysCheckin.mentalStatus].emoji}</Text>
-                  <Text style={[styles.statusBadgeText, { color: STATUS_META[todaysCheckin.mentalStatus].color }]}>
-                    {STATUS_META[todaysCheckin.mentalStatus].short}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.checkinTime}>
-                {new Date(todaysCheckin.createdAt).toLocaleTimeString('en-US', {
-                  hour: 'numeric',
-                  minute: '2-digit',
-                })}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.statusCard}>
-              <Text style={styles.cardLabel}>No check-ins yet today</Text>
-              <Text style={styles.cardSubtext}>Tap below to share how you're feeling</Text>
-            </View>
-          )}
-
-          <View style={styles.ctaCard}>
-            <FontAwesome name="heartbeat" size={44} color={theme.primary} />
-            <Text style={styles.ctaTitle}>How are you feeling?</Text>
-            <Text style={styles.ctaSubtext}>
-              It only takes a few seconds to let your loved ones know.
-            </Text>
-            <Pressable
-              style={({ pressed }) => [styles.ctaButton, pressed && styles.ctaButtonPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Start check-in"
-              onPress={() => router.push('/checkin')}>
-              <Text style={styles.ctaButtonText}>Start Check-In</Text>
-            </Pressable>
-          </View>
+          <CheckinCard
+            todaysCheckin={todaysCheckin}
+            checkinTimes={checkinTimes}
+            onStartCheckin={() => router.push('/checkin')}
+          />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -397,111 +357,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.textSecondary,
     fontWeight: '500',
-  },
-  statusCard: {
-    backgroundColor: theme.card,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-    ...theme.cardShadow,
-  },
-  cardLabel: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    fontWeight: '600',
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  cardSubtext: {
-    fontSize: 16,
-    color: theme.textSecondary,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-  },
-  statusBadgeEmoji: {
-    fontSize: 20,
-  },
-  statusBadgeText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  checkinTime: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 8,
-  },
-  nudgeCard: {
-    backgroundColor: theme.card,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    borderLeftWidth: 4,
-    borderLeftColor: theme.primary,
-  },
-  nudgeBody: {
-    flex: 1,
-  },
-  nudgeTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    marginBottom: 2,
-  },
-  nudgeSubtext: {
-    fontSize: 14,
-    color: theme.textSecondary,
-    lineHeight: 20,
-  },
-  ctaCard: {
-    backgroundColor: theme.card,
-    borderRadius: 20,
-    padding: 28,
-    alignItems: 'center',
-    ...theme.cardShadow,
-  },
-  ctaTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    marginTop: 14,
-    marginBottom: 8,
-  },
-  ctaSubtext: {
-    fontSize: 16,
-    color: theme.textSecondary,
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 23,
-  },
-  ctaButton: {
-    backgroundColor: theme.cta,
-    borderRadius: 16,
-    paddingVertical: 18,
-    width: '100%',
-    alignItems: 'center',
-  },
-  ctaButtonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  ctaButtonText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '700',
   },
 });
